@@ -1,23 +1,23 @@
 # Liero
 
-The original Liero game in a browser, with mouse controls, regional matchmaking,
+The original Liero game in a browser, with mouse controls, ping-based matchmaking,
 WebRTC rooms and spectators. Built from [gliptic/liero](https://github.com/gliptic/liero):
 the C++ simulation runs as compiled JavaScript, with adapters for browser graphics,
 audio and input.
 
 ## Play
 
-[Open the hosted game](https://liero-arena-michele.haxthepax.chatgpt.site/).
-The current hosted release is restricted to the owner's account.
+[Open the hosted game](https://liero.haxthepax.chatgpt.site/).
+The hosted game is public.
 
-The game joins a reachable public room in your region, prioritizing measured ping.
+The game joins the reachable public room with the lowest measured ping.
 If no room is reachable, it creates one. Everyone enters as a spectator; select
 **Join game** to play. Rooms support up to 16 people, including spectators, with
 two active players to preserve the original engine.
 
-- **Rooms:** explore, create public/private rooms, copy invite links and chat.
+- **Rooms:** sort by people, ping or name; filter empty/full rooms; create public/private rooms, copy invite links and chat.
 - **Spectating:** follow either player or drag with the right mouse button in free camera.
-- **Room settings:** choose rules, permitted weapons and map rotation.
+- **Room settings:** choose rules, permitted weapons and map rotation. Hosts can use **Play now** in Maps to restart on a selected level for everyone.
 - **Maps:** 897 bundled levels with previews, plus drag-and-drop LEV, Powerlevel
   and common image imports. Levels are served from our hosting, not third parties.
 - **Profile:** save your name, worm color, five-weapon loadout and key bindings locally.
@@ -120,3 +120,5 @@ Original engine: [gliptic/liero](https://github.com/gliptic/liero).
 Map collection: [webliero-maps](https://gitlab.com/webliero/webliero-maps), with
 individual provenance retained in [map sources](src/browser/maps/SOURCES.md).
 Original source and asset copyright/license notices remain in their respective files.
+
+The favicon is the original icon served by [WebLiero](https://www.webliero.com/favicon.ico), bundled locally. Country flags are from [flag-icons](https://github.com/lipis/flag-icons) under the bundled MIT license.

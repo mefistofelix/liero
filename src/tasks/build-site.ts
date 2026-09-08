@@ -11,7 +11,8 @@ for(const [source,out,target] of [['src/browser/client.ts','client/client.js','b
   if(result.outputs.length!==1)throw new Error('Unexpected build outputs');
   await Bun.write(resolve(dist,out),result.outputs[0]);
 }
-const assets=['index.html','style.css','liero.ttf','engine/openliero.mjs','engine/openliero.data','maps/temple.lev','manifest.webmanifest','sw.js','favicon.svg','icon-192.png','icon-512.png'];
+const assets=['index.html','style.css','liero.ttf','engine/openliero.mjs','engine/openliero.data','maps/temple.lev','maps/catalog.json','manifest.webmanifest','sw.js','favicon.ico','icon-192.png','icon-512.png'];
+for(const flag of new Bun.Glob('*.svg').scanSync({cwd:resolve(root,'src/browser/flags')}))assets.push('flags/'+flag);
 for(const level of catalog)assets.push(level.asset.slice(1),level.thumbnail.slice(1));
 for(const asset of new Set(assets))await Bun.write(resolve(dist,'client',asset),Bun.file(resolve(root,'src/browser',asset)));
 await Bun.write(resolve(dist,'.openai/hosting.json'),Bun.file(resolve(root,'.openai/hosting.json')));

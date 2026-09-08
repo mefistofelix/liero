@@ -1,6 +1,6 @@
 import { REGIONS, detectRegion, joinQueue, queueStatus, leaveQueue, cleanup } from './matchmaker.js';
 import {roomAPI} from './rooms.js';
-import {mapAPI} from './maps.js';
+import {requestCountry} from './geography.js';
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -18,9 +18,8 @@ export default {
     const url = new URL(request.url);
     const origin = request.headers.get('Origin');
     if (origin && origin !== url.origin) return json({ error: 'Origin not allowed' }, 403);
-    if(url.pathname==='/api/maps')return mapAPI(request);
     if (request.method === 'GET' && url.pathname === '/api/region') {
-      return json({ region: detectRegion(request.cf), regions: REGIONS });
+      return json({ region: detectRegion(request.cf), country: requestCountry(request), regions: REGIONS });
     }
     if(url.pathname==='/api/rooms'||url.pathname.startsWith('/api/rooms/'))return roomAPI(request,env,await playerKey(request));
     if (url.pathname !== '/api/queue') return json({ error: 'Not found' }, 404);

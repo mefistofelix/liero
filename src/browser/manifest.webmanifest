@@ -1,5 +1,5 @@
 {
- "id":"/", "name":"Liero Arena", "short_name":"Liero", "lang":"en",
+ "id":"/", "name":"Liero", "short_name":"Liero", "lang":"en",
  "description":"Original Liero gameplay, mouse controls and peer-to-peer rooms.",
  "start_url":"/", "scope":"/", "display":"standalone",
  "background_color":"#101718", "theme_color":"#182223",

@@ -30,12 +30,12 @@ test('room seats cannot be overbooked; chat and signaling are member scoped',asy
  expect((await f.request('a',`/rooms/${id}/signals`)).data.signals).toHaveLength(1);expect((await f.request('c',`/rooms/${id}/signals`)).data.signals).toHaveLength(0);
  }finally{f.sql.close();}
 });
-test('automatic matching pairs within the region and stale hosts disappear',async()=>{
+test('room discovery is worldwide and stale hosts disappear',async()=>{
  const f=await fixture();try{
  const create=(token:string,region:string)=>f.request(token,'/rooms','POST',{name:'Quick match',playerName:token,region,settings,auto:true});
- const a=await create('a','EU'),b=await create('b','NA'),c=await create('c','EU');expect(a.data.id).toBe(c.data.id);expect(b.data.id).not.toBe(c.data.id);expect(c.data.seat).toBe(-1);
+ const a=await create('a','EU'),b=await create('b','NA'),c=await create('c','EU');expect(a.data.id).toBe(c.data.id);expect(b.data.id).toBe(c.data.id);expect(c.data.seat).toBe(-1);
  f.sql.query('UPDATE rooms SET expires_at=0 WHERE id=?').run(a.data.id);
- const list=(await f.request('d','/rooms')).data.rooms;expect(list).toHaveLength(1);expect(list[0].region).toBe('NA');
+ const list=(await f.request('d','/rooms')).data.rooms;expect(list).toHaveLength(0);
  }finally{f.sql.close();}
 });
 test('host can spectate while both seats are held by guests, and a playing member can return to spectating',async()=>{
@@ -48,6 +48,15 @@ test('host can spectate while both seats are held by guests, and a playing membe
  expect((await f.request('a',`/rooms/${id}/seat`,'POST',{play:true})).status).toBe(409);
  }finally{f.sql.close();}
 });
+test('room creation needs no region or cf metadata, and records player and host flags',async()=>{
+ const sql=new Database(':memory:'),DB=await localDatabase(sql,new URL('../server/migrations/',import.meta.url));
+ try{const send=async(token:string,path:string,data?:unknown)=>{const request=new Request('https://game.test/api'+path,{method:data?'POST':'GET',headers:{Authorization:'Bearer '+token.padStart(64,'0'),'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});const response=await worker.fetch(request,{DB});return {status:response.status,value:await response.json()};};
+ const created=await send('a','/rooms',{name:'Worldwide',playerName:'Host',country:'IT',settings});expect(created.status).toBe(201);
+ await send('b','/rooms/'+created.value.id+'/join',{name:'Guest',country:'DE'});
+ const room=(await send('a','/rooms/'+created.value.id+'/state')).value;expect(room.country).toBe('IT');expect(room.members.map(m=>m.country).sort()).toEqual(['DE','IT']);
+ }finally{sql.close();}
+});
+
 test('room weapon availability is host-owned, validated and persisted',async()=>{
  const f=await fixture();try{const {id}=(await f.request('a','/rooms','POST',{name:'Weapon pool',playerName:'Host',region:'EU',settings})).data;
  await f.request('b',`/rooms/${id}/join`,'POST',{name:'Guest'});

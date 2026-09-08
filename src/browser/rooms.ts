@@ -1,5 +1,6 @@
 import type {Preferences} from './preferences.ts';
-export type Member={id:string;name:string;color:string;seat:number};
+import {localCountry} from './flags.ts';
+export type Member={id:string;name:string;color:string;seat:number;country?:string};
 export type Room={id:string;name:string;region:string;country:string;private:boolean;phase:string;count:number;capacity:number;players?:number;settings:any;self:string;owner:string;members:Member[];chat:{seq:number;name:string;message:string;created_at:number}[]};
 const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
 export async function api(path:string,method='GET',body?:unknown,invite='',identity=token){
@@ -33,8 +34,8 @@ export class RoomClient{
  onState=(room:Room)=>{};onPacket=(from:string,packet:Packet)=>{};onReady=(id:string)=>{};onLost=(id:string)=>{};onError=(error:Error)=>{};
  get host(){return !!this.room&&this.room.self===this.room.owner;}
  get seat(){return this.room?.members.find(m=>m.id===this.room?.self)?.seat??-1;}
- async create(p:Preferences,auto=false){const result=await api('/rooms','POST',{name:p.roomName,playerName:p.name,color:p.color,private:p.privateRoom,region:p.region,settings:{...p.rules,rotation:p.rotation},auto});await this.enter(result.id,result.invite||'');}
- async join(id:string,invite:string,p:Preferences){await api(`/rooms/${id}/join`,'POST',{name:p.name,color:p.color},invite);await this.enter(id,invite);}
+ async create(p:Preferences,auto=false){const result=await api('/rooms','POST',{name:p.roomName,playerName:p.name,color:p.color,private:p.privateRoom,country:await localCountry(),settings:{...p.rules,rotation:p.rotation},auto});await this.enter(result.id,result.invite||'');}
+ async join(id:string,invite:string,p:Preferences){await api(`/rooms/${id}/join`,'POST',{name:p.name,color:p.color,country:await localCountry()},invite);await this.enter(id,invite);}
  private async enter(id:string,invite:string){this.id=id;this.invite=invite;this.cursor=0;this.stopped=false;await this.poll();}
  async call(action:string,method='GET',body?:unknown){return api(`/rooms/${this.id}${action?`/${action}`:''}`,method,body,this.invite);}
  private wire(id:string){

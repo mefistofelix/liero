@@ -123,9 +123,17 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - Worm labels display the player name, with two thin bars below it for health and
   current-weapon reload progress, including while spectating. Use original engine
   health limits and reload timers. Your weapon name briefly replaces your name on change.
-- Startup: measure public room host RTT, prefer local-region reachable rooms; otherwise
-  choose the lowest-ping reachable room elsewhere. If none are reachable, create public.
-  Region is continent-level. Country flags derive from server geography, never guessed.
+- Startup: choose the reachable public room with the lowest measured RTT worldwide;
+  create a public room if none is reachable. There is NO region selector or region
+  requirement. Explorer defaults to people descending, then ping ascending; columns
+  are sortable and Show empty/Show full filters toggle inclusion. Flags are informative.
+- Room and player flags use bundled SVG files. Obtain country from request.cf or
+  cf-ipcountry; Sites fallback is the browser’s same-origin /cdn-cgi/trace loc field.
+  Preserve unknown geography as unknown; do not guess a country.
+- Maps has a right-toolbar button and an independently scrolling body beneath a fixed
+  header/close control. Hosts can Play now to restart everyone on a selected map;
+  while waiting for players, broadcast the selected preview and use it for the next round.
+- The hosted game is PUBLIC at https://liero.haxthepax.chatgpt.site/ and is named Liero.
 - Every room entry, INCLUDING creation, starts as spectator. Host is an independent
   ownership role; either/both player seats may belong to guests. A Play action claims
   an available seat. Two ready players trigger a round automatically.

@@ -1,4 +1,5 @@
-import {REGIONS,detectRegion} from './matchmaker.js';
+import {detectRegion} from './matchmaker.js';
+import {requestCountry} from './geography.js';
 const TTL=120;
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
@@ -31,20 +32,20 @@ export async function roomAPI(request,env,key){
   }
   if(!key)fail('Invalid identity.',401);
   if(!id&&request.method==='POST'){
-   const b=await body(request),region=b.region==='auto'?detectRegion(request.cf):b.region;
-   if(!REGIONS.includes(region))fail('Select a region.');
+   const b=await body(request),region=detectRegion(request.cf)||'',country=requestCountry(request,b.country);
    const existing=await query(db,'SELECT room FROM members WHERE player=?',key);if(existing.length)fail('Leave your current room first.',409);
    const settings=rules(b.settings),name=short(b.name,48),playerName=short(b.playerName,20),roomId=crypto.randomUUID(),invite=crypto.randomUUID()+crypto.randomUUID();
    const statements=[];
    // Legacy API auto-join also enters as a spectator. The browser selects
    // candidates using measured WebRTC RTT before calling the join endpoint.
    if(b.auto===true)statements.push(statement(db,`INSERT INTO members(room,player,name,seat,expires_at)
-    SELECT r.id,?,?,-1,? FROM rooms r WHERE r.region=? AND r.private=0
-    AND (SELECT COUNT(*) FROM members m WHERE m.room=r.id)<16 ORDER BY r.id LIMIT 1`,key,playerName,now+TTL,region));
+    SELECT r.id,?,?,-1,? FROM rooms r WHERE r.private=0
+    AND (SELECT COUNT(*) FROM members m WHERE m.room=r.id)<16 ORDER BY r.id LIMIT 1`,key,playerName,now+TTL));
    statements.push(statement(db,`INSERT INTO rooms(id,owner,name,region,private,invite,settings,expires_at)
     SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM members WHERE player=?)`,roomId,key,name,region,b.auto?0:(b.private?1:0),await hash(invite),JSON.stringify(settings),now+TTL,key));
    statements.push(statement(db,`INSERT INTO members(room,player,name,seat,expires_at) SELECT ?,?,?,-1,? WHERE EXISTS(SELECT 1 FROM rooms WHERE id=?)`,roomId,key,playerName,now+TTL,roomId));
-   statements.push(statement(db,'UPDATE rooms SET country=? WHERE id=?',/^[A-Z]{2}$/.test(request.cf?.country||'')?request.cf.country:'',roomId));
+   statements.push(statement(db,'UPDATE rooms SET country=? WHERE id=?',country,roomId));
+   statements.push(statement(db,'UPDATE members SET country=? WHERE player=?',country,key));
    statements.push(statement(db,'UPDATE members SET color=? WHERE player=?',/^#[a-f0-9]{6}$/i.test(b.color)?b.color:'#6868fc',key));
    statements.push(statement(db,'SELECT room,seat FROM members WHERE player=?',key));
    const r=await db.batch(statements),member=r.at(-1).results[0];return json({id:member.room,seat:member.seat,invite:member.room===roomId?invite:undefined},201);
@@ -60,7 +61,7 @@ export async function roomAPI(request,env,key){
    if(member)return json({id,seat:member.seat});
    const occupied=(await query(db,'SELECT room FROM members WHERE player=?',key))[0];if(occupied)fail('Leave your current room first.',409);
    const r=await db.batch([statement(db,`INSERT INTO members(room,player,name,seat,expires_at) SELECT ?,?,?,-1,? WHERE (SELECT COUNT(*) FROM members WHERE room=?)<16`,id,key,playerName,now+TTL,id),statement(db,'SELECT seat FROM members WHERE player=? AND room=?',key,id)]);
-   if(!r[1].results.length)fail('Room is full.',409);await query(db,'UPDATE members SET color=? WHERE room=? AND player=?',/^#[a-f0-9]{6}$/i.test(b.color)?b.color:'#6868fc',id,key);return json({id,seat:-1});
+   if(!r[1].results.length)fail('Room is full.',409);await query(db,'UPDATE members SET country=? WHERE room=? AND player=?',requestCountry(request,b.country),id,key);await query(db,'UPDATE members SET color=? WHERE room=? AND player=?',/^#[a-f0-9]{6}$/i.test(b.color)?b.color:'#6868fc',id,key);return json({id,seat:-1});
   }
   if(action==='signals'){
    // Public visitors may probe host RTT without occupying a player seat.
@@ -75,7 +76,7 @@ export async function roomAPI(request,env,key){
   }
   if(!member)fail('Join the room first.',403);
   if(action==='state'&&request.method==='GET'){
-   const r=await db.batch([statement(db,'UPDATE members SET expires_at=? WHERE room=? AND player=?',now+TTL,id,key),statement(db,'UPDATE rooms SET expires_at=? WHERE id=? AND owner=?',now+TTL,id,key),statement(db,'SELECT player id,name,color,seat FROM members WHERE room=? ORDER BY seat,name',id),statement(db,'SELECT seq,name,message,created_at FROM room_chat WHERE room=? ORDER BY seq DESC LIMIT 100',id)]);
+   const r=await db.batch([statement(db,'UPDATE members SET expires_at=? WHERE room=? AND player=?',now+TTL,id,key),statement(db,'UPDATE rooms SET expires_at=? WHERE id=? AND owner=?',now+TTL,id,key),statement(db,'SELECT player id,name,color,seat,country FROM members WHERE room=? ORDER BY seat,name',id),statement(db,'SELECT seq,name,message,created_at FROM room_chat WHERE room=? ORDER BY seq DESC LIMIT 100',id)]);
    return json({...publicRoom(room,r[2].results.length),owner:room.owner,self:key,members:r[2].results,chat:r[3].results.reverse()});
   }
   if(action==='seat'&&request.method==='POST'){

@@ -1,6 +1,6 @@
-import catalog from './maps/catalog.json';
 export type Level={id:string;name:string;flags?:number;url?:string;data?:Uint8Array;preview?:string;sha256?:string};
-export const builtins:Level[]=[{id:'random',name:'Original random terrain'},{id:'temple',name:'TEMPLE.LEV',url:'/maps/temple.lev'},...catalog.map(level=>({...level,url:level.asset,preview:level.thumbnail}))];
+export const builtins:Level[]=[{id:'random',name:'Original random terrain'},{id:'temple',name:'TEMPLE.LEV',url:'/maps/temple.lev'}];
+export async function catalogLevels():Promise<Level[]>{const response=await fetch('/maps/catalog.json');if(!response.ok)throw new Error('Map catalog unavailable.');return (await response.json()).map((level:any)=>({...level,url:level.asset,preview:level.thumbnail}));}
 const SIZE=504*350;
 let dbPromise:Promise<IDBDatabase>;
 const pending=new Map<string,Promise<Uint8Array|null>>();

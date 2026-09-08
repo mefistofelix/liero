@@ -60,8 +60,10 @@ export class LocalGame {
     const opts = {signal: this.events.signal};
     canvas.addEventListener('pointermove', this.point, opts);
     canvas.addEventListener('pointerdown', event => {
-      event.preventDefault(); canvas.focus(); this.point(event);
+      canvas.focus(); this.point(event);
       canvas.setPointerCapture(event.pointerId);
+      this.pendingButtons|=event.buttons&~this.buttons;
+      this.buttons=event.buttons;
     }, opts);
     // Pointerdown fires only for the first mouse button; mousedown includes chords.
     canvas.addEventListener('mousedown', event => {
@@ -92,6 +94,8 @@ export class LocalGame {
     this.resizeObserver.observe(canvas.parentElement!);
   }
   private point = (event: PointerEvent) => {
+    this.pendingButtons|=event.buttons&~this.buttons;
+    this.buttons=event.buttons;
     const rect = this.canvas.getBoundingClientRect();
     if(this.freeCamera&&(event.buttons&2)&&event.type==='pointermove'){
       this.camera.x=Math.max(this.canvas.width/2,Math.min(504-this.canvas.width/2,this.camera.x-(event.clientX-this.dragPoint.x)*this.canvas.width/rect.width));

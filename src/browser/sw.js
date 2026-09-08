@@ -1,5 +1,5 @@
-const CACHE='liero-arena-v2';
-const ASSETS=['/','/client.js','/style.css','/liero.ttf','/engine/openliero.mjs','/engine/openliero.data','/maps/temple.lev','/manifest.webmanifest','/icon-192.png','/icon-512.png','/favicon.svg'];
+const CACHE='liero-v3';
+const ASSETS=['/','/client.js','/style.css','/liero.ttf','/engine/openliero.mjs','/engine/openliero.data','/maps/temple.lev','/maps/catalog.json','/manifest.webmanifest','/icon-192.png','/icon-512.png','/favicon.ico'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS))));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('liero-arena-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

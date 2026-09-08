@@ -41,17 +41,17 @@ Il server ascolta solo su loopback. Per test tra macchine servono un bind di ret
 esplicito e un'origine HTTPS; WebRTC richiede inoltre STUN/TURN appropriati alle
 reti coinvolte. Non è incluso un servizio TURN pubblico con credenziali.
 
-Hosting previsto dopo la validazione locale. Non è stato eseguito alcun deploy.
+Hosting attivo su https://liero.haxthepax.chatgpt.site/ (Cloudflare Worker + D1).
 
 ## Stanze e browser
 
 Le stanze usano il contratto SQL D1 in locale: elenco pubblico, inviti privati,
-chat, heartbeat e signaling SDP/ICE. All’avvio il client misura RTT delle stanze pubbliche: preferisce la propria
-regione, poi il ping minimo altrove. In assenza di host raggiungibili crea una
+chat, heartbeat e signaling SDP/ICE. All’avvio il client misura RTT delle stanze pubbliche
+in tutto il mondo e sceglie il ping minimo. In assenza di host raggiungibili crea una
 stanza pubblica. Tutti entrano da spettatori; due posti di gioco sono distinti
 dalla proprietà della stanza. Il pulsante Play prenota un posto disponibile.
 La vecchia API /api/queue resta disponibile come prototipo separato; l'interfaccia
-usa /api/rooms. D1 reale e deployment non sono ancora stati verificati.
+usa /api/rooms. Il primo deployment e le API D1 sono stati verificati online.
 
 Due player eseguono lockstep su WebRTC con sei tick di buffer. La pagina dell'host
 deve restare attiva: i browser limitano requestAnimationFrame in background.

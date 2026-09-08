@@ -3,7 +3,7 @@
 - Bun 1.4.2 on Windows. `bun run dev` serves the game at port 3000.
 - `bun run engine` and `bun run engine:wasm` build successfully through Bun tasks,
   using Emscripten 6.0.9, Python/Clang, CMake and Ninja. No PowerShell build wrapper.
-- `bun run test`: 25 tests pass, including original keyboard JS/WASM fixtures,
+- `bun run test`: 28 tests pass, including original keyboard JS/WASM fixtures,
   deterministic rendering/cameras, contextual W/S and rope release, weapon pools,
   original lethal-weapon telemetry, room permissions and concurrent seat claims.
 - All 897 map entries have local LEV assets and PNG previews. Tests verify each

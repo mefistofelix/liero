@@ -24,3 +24,7 @@ button,input,select,.icon-button,#hud{line-height:1}button,input,select{padding-
 #chat-feed .chat-exit{animation:chat-exit .35s ease-out both}@keyframes chat-exit{from{opacity:1}to{opacity:0}}
 
 #worm-labels>span{display:flex;flex-direction:column;align-items:center;gap:2px}#worm-labels .worm-name{line-height:1.1;margin-bottom:1px}#worm-labels .worm-bar{display:block;width:64px;height:3px;background:#242829d9;box-shadow:0 0 0 1px #0009}#worm-labels .worm-bar i{display:block;width:100%;height:100%;transform-origin:left}#worm-labels .worm-health i{background:#8cc875}#worm-labels .worm-reload i{background:#e0ce86}
+
+.country-flag{display:inline-block;width:20px;height:15px;object-fit:cover;vertical-align:middle;flex-shrink:0;margin-right:6px}.country-unknown{font-family:system-ui,sans-serif;font-size:15px;margin-right:6px}#maps-menu[open]{display:flex;flex-direction:column;overflow:hidden;padding:0;max-height:calc(100dvh - 28px)}#maps-menu>.dialog-heading{flex-shrink:0;margin:0;padding:18px 22px;background:var(--panel);border-bottom:1px solid var(--line)}#maps-menu>.maps-scroll{overflow-y:auto;min-height:0;padding:18px 22px;overscroll-behavior:contain}#maps-menu>.dialog-toast{flex-shrink:0;margin:0;padding:10px 22px}.play-map{margin:0 8px 8px;font-size:14px;padding:7px 10px}
+
+#rooms-menu th button{background:none;border:0;padding:0;color:inherit;font:inherit}#rooms-menu th[aria-sort=ascending] button::after{content:" ↑"}#rooms-menu th[aria-sort=descending] button::after{content:" ↓"}

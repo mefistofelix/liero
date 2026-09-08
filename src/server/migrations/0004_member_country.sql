@@ -1,0 +1,1 @@
+ALTER TABLE members ADD COLUMN country TEXT NOT NULL DEFAULT '';

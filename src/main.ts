@@ -17,13 +17,15 @@ const files: Record<string,{name:string,type:string}> = {
  '/engine/openliero.mjs':{name:'engine/openliero.mjs',type:'text/javascript'},
  '/engine/openliero.data':{name:'engine/openliero.data',type:'application/octet-stream'},
  '/maps/temple.lev':{name:'maps/temple.lev',type:'application/octet-stream'},
+ '/maps/catalog.json':{name:'maps/catalog.json',type:'application/json'},
  '/manifest.webmanifest':{name:'manifest.webmanifest',type:'application/manifest+json'},
  '/sw.js':{name:'sw.js',type:'text/javascript'},
- '/favicon.svg':{name:'favicon.svg',type:'image/svg+xml'},
+ '/favicon.ico':{name:'favicon.ico',type:'image/x-icon'},
  '/icon-192.png':{name:'icon-192.png',type:'image/png'},
  '/icon-512.png':{name:'icon-512.png',type:'image/png'},
 };
 for(const level of catalog){files[level.asset]={name:level.asset.slice(1),type:'application/octet-stream'};files[level.thumbnail]={name:level.thumbnail.slice(1),type:'image/png'};}
+for(const flag of new Bun.Glob('*.svg').scanSync({cwd:`${import.meta.dir}/browser/flags`}))files['/flags/'+flag]={name:'flags/'+flag,type:'image/svg+xml'};
 const server = Bun.serve({
  hostname:'127.0.0.1', port:Number(Bun.env.PORT ?? 3000),
  async fetch(request) {
@@ -35,7 +37,6 @@ const server = Bun.serve({
   }
   if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});
   if(path==='/client.js')return new Response(request.method==='HEAD'?null:client,{headers:{'Content-Type':'text/javascript','Cache-Control':'no-store'}});
-  if(path==='/favicon.ico')return new Response(null,{status:204});
   const asset=files[path];
   if(!asset)return new Response('Not found',{status:404});
   const file=Bun.file(new URL(`./browser/${asset.name}`,import.meta.url));
@@ -43,7 +44,7 @@ const server = Bun.serve({
   return new Response(request.method==='HEAD'?null:file,{headers:{'Content-Type':asset.type,'Cache-Control':'no-store'}});
  },
 });
-console.log(`Liero Arena: ${server.url}`);
+console.log(`Liero: ${server.url}`);
 console.log(`Runtime Bun ${Bun.version}; local geography ${Bun.env.LOCAL_REGION??'EU'}.`);
 
 const cleanup=setInterval(()=>api.scheduled(null,{DB}),600000);

@@ -11,6 +11,8 @@ The upstream resource endpoint is
 Filenames are case sensitive on that endpoint.
 
 All 897 catalog maps and precomputed PNG previews are bundled in src/browser/maps.
+The browser fetches `/maps/catalog.json` as a static asset. Neither the client
+bundle nor the Worker embeds the catalog; map files are served directly as assets.
 The source collection is https://gitlab.com/webliero/webliero-maps. Every catalog
 entry records its source path, SHA-256, local level and thumbnail URL. SOURCES.md
 preserves attribution and the source revision. There are no runtime fetches to
