@@ -106,6 +106,8 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   Audio is controlled only by the toolbar toggle. Neither belongs in Profile.
 - Popup close/Escape returns to the previous menu when opened from that menu
   (e.g. Profile -> Weapons -> close -> Profile), retaining prior tab/form state.
+- Opening settings or any popup NEVER pauses the simulation, including local play.
+  Menus suppress gameplay input while open; the match and bot continue running.
 - Profile Weapons chooses a personal five-slot loadout. Room Allowed weapons is
   a separate host-owned availability pool, applied to both loadouts and bonus drops
   through original Settings::weapTable. Validate at least one permitted weapon.

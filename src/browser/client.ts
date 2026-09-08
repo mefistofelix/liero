@@ -27,7 +27,7 @@ controlsUI(prefs,save,()=>game?.setControls(prefs.controls));
 const guard=async(fn:()=>Promise<void>)=>{if(busy)return;busy=true;try{await fn();}finally{busy=false;}};
 input('player-name').value=prefs.name;input('player-color').value=prefs.color;input('room-name').value=prefs.roomName;input('private-room').checked=prefs.privateRoom;input('keyboard-only').checked=prefs.keyboardOnly;
 select('game-mode').value=String(prefs.rules.mode);input('rule-lives').value=String(prefs.rules.lives);input('rule-loading').value=String(prefs.rules.loading);input('rule-bonuses').value=String(prefs.rules.bonuses);
-menuHandler(open=>{game?.pause(open);if(!open&&playing)canvas.focus();});
+menuHandler(open=>{if(!open&&playing)canvas.focus();});
 function applyRules(rules:Rules,loadouts:number[][],colors:string[],data:Uint8Array|null){
  const pool=weaponPool(rules.allowedWeapons);loadouts=loadouts.map(list=>permittedLoadout(list,pool));for(let id=1;id<=40;id++)module._liero_allowed(id,pool.includes(id)?1:0);
  if(data)module.FS.writeFile('/import.lev',validateLevel(data));
