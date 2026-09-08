@@ -74,7 +74,7 @@ L'installazione dipende dalle capacità del browser e da un'origine sicura.
 
 ## Task e cartelle
 
-`package.json` espone dev/start, test, engine, engine:wasm e assets:font/icons/maps.
+`package.json` espone dev/start, build, test, engine, engine:wasm e assets:font/icons/maps.
 Gli script sono in src/tasks e i test in src/tests. La build usa Bun.spawn con
 argomenti separati, senza shell PowerShell. Emscripten richiede Python e Clang;
 CMake e Ninja orchestrano i sorgenti originali. I percorsi si risolvono da
@@ -91,3 +91,14 @@ Senza un paese noto si mostra un globo, senza inventare una bandiera.
 Le 897 mappe e le anteprime sono asset inclusi nel repository; nessuna dipendenza
 da WebLiero per caricamento o gioco. Il service worker conserva le mappe già
 visitate per l’uso offline, senza scaricare automaticamente l’intero archivio.
+
+## Hosting
+
+`bun run build` genera `dist/server/index.js` e `dist/client`, con tutti gli asset
+del gioco. `src/server/hosting.ts` instrada le API al Worker esistente e il resto
+al binding statico ASSETS. Il binding DB usa D1 reale; nessun processo Bun,
+Node.js o server di simulazione viene avviato in produzione.
+Le migrazioni SQL esistenti sono copiate in `dist/.openai/drizzle` con un journal
+versionato; vengono applicate in fase di pubblicazione, mai nelle richieste.
+I task Bun possono usare i moduli di compatibilità `node:fs`/`node:path` supportati
+da Bun; questo non introduce un runtime Node.js.

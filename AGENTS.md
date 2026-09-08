@@ -56,6 +56,9 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   `src/tasks/build-engine.ts` normalizes discovery and environment overrides.
   Document actual toolchain limitations in `docs/stack.md`.
 - Hosting is authorized later; test locally first. Do not publish an unfinished preview.
+- Hosting publication is now requested after local validation. `bun run build` emits
+  `dist/server/index.js`, `dist/client` and Sites D1 migration metadata. Production
+  uses Cloudflare Workers + D1 and static assets; Bun/SQLite runs only locally.
 - Default presentation is full-page gameplay with a single player viewport, compact
   corner toolbars without a header. Split screen is an option
   for two local players sharing a keyboard, not the default online/bot presentation.

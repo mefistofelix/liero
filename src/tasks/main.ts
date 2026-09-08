@@ -1,5 +1,6 @@
 const task=Bun.argv[2]||'help';
 switch(task){
+ case 'site':await import('./build-site.ts');break;
  case 'engine':case 'engine-wasm':await (await import('./build-engine.ts')).buildEngine(task==='engine-wasm');break;
  case 'font':await import('./create-font.ts');break;
  case 'icons':await import('./create-icons.ts');break;
