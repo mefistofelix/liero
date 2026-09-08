@@ -1,0 +1,5 @@
+// Small deterministic RGBA PNG encoder using native Bun compression.
+const u32=(n:number)=>new Uint8Array([n>>>24,n>>>16,n>>>8,n]);
+const join=(...a:Uint8Array[])=>{const b=new Uint8Array(a.reduce((n,v)=>n+v.length,0));let p=0;for(const v of a){b.set(v,p);p+=v.length;}return b;};
+const chunk=(type:string,data:Uint8Array)=>{const bytes=join(new TextEncoder().encode(type),data);let c=0xffffffff;for(const b of bytes){c^=b;for(let k=0;k<8;k++)c=c&1?(c>>>1)^0xedb88320:c>>>1;}return join(u32(data.length),bytes,u32((c^0xffffffff)>>>0));};
+export function png(width:number,height:number,rgba:Uint8Array){const scan=new Uint8Array((width*4+1)*height);for(let y=0;y<height;y++)scan.set(rgba.subarray(y*width*4,(y+1)*width*4),y*(width*4+1)+1);let a=1,b=0;for(const v of scan){a=(a+v)%65521;b=(b+a)%65521;}return join(new Uint8Array([137,80,78,71,13,10,26,10]),chunk('IHDR',join(u32(width),u32(height),new Uint8Array([8,6,0,0,0]))),chunk('IDAT',join(new Uint8Array([120,156]),Bun.deflateSync(scan),u32(((b<<16)|a)>>>0))),chunk('IEND',new Uint8Array()));}

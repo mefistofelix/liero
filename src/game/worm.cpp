@@ -984,7 +984,7 @@ void Worm::processMovement(Game& game)
 			if(vel.x > LC(MaxVelLeft))
 				vel.x -= LC(WalkVelLeft);
 
-			if(direction != 0)
+			if(direction != 0 && !externalAim)
 			{
 				aimingSpeed = 0;
 				if(aimingAngle >= itof(64))
@@ -1000,7 +1000,7 @@ void Worm::processMovement(Game& game)
 			if(vel.x < LC(MaxVelRight))
 				vel.x += LC(WalkVelRight);
 
-			if(direction != 1)
+			if(direction != 1 && !externalAim)
 			{
 				aimingSpeed = 0;
 				if(aimingAngle <= itof(64))

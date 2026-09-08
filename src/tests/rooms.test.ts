@@ -1,0 +1,58 @@
+import {test,expect} from 'bun:test';
+import {Database} from 'bun:sqlite';
+import {localDatabase} from '../server/local-database.ts';
+import worker from '../server/worker.js';
+const settings={mode:0,lives:15,loading:100,bonuses:4,rotation:['random','temple']};
+async function fixture(){const sql=new Database(':memory:');const DB=await localDatabase(sql,new URL('../server/migrations/',import.meta.url));return {sql,request:async(token:string,path:string,method='GET',body?:unknown,invite='')=>{const req=new Request('https://game.test/api'+path,{method,headers:{Authorization:'Bearer '+token.padStart(64,'0'),'Content-Type':'application/json',...(invite?{'X-Room-Invite':invite}:{})},body:body?JSON.stringify(body):undefined});Object.defineProperty(req,'cf',{value:{continent:'EU'}});const response=await worker.fetch(req,{DB});return {status:response.status,data:await response.json()};}};}
+test('private rooms hide from explorer and require invite; host owns settings; guests spectate',async()=>{
+ const f=await fixture();try{
+ const created=await f.request('a','/rooms','POST',{name:'Private test',playerName:'Host',color:'#ee3355',region:'auto',private:true,settings});expect(created.status).toBe(201);const {id,invite}=created.data;
+ expect((await f.request('b','/rooms')).data.rooms).toHaveLength(0);
+ expect((await f.request('b',`/rooms/${id}/join`,'POST',{name:'Guest'})).status).toBe(404);
+ expect((await f.request('b',`/rooms/${id}/join`,'POST',{name:'Guest',color:'#123456'},invite)).data.seat).toBe(-1);
+ const state=await f.request('b',`/rooms/${id}/state`);expect(state.data.members).toHaveLength(2);expect(state.data.members.some(m=>m.color==='#ee3355')).toBe(true);
+ expect((await f.request('b',`/rooms/${id}/settings`,'PUT',{name:'Hijack',settings})).status).toBe(403);
+ expect((await f.request('b',`/rooms/${id}/seat`,'POST',{play:true})).data.seat).toBe(0);
+ expect((await f.request('a',`/rooms/${id}`,'DELETE')).status).toBe(200);
+ expect((await f.request('b',`/rooms/${id}/state`)).status).toBe(404);
+ }finally{f.sql.close();}
+});
+test('room seats cannot be overbooked; chat and signaling are member scoped',async()=>{
+ const f=await fixture();try{
+ const {id}= (await f.request('a','/rooms','POST',{name:'Room',playerName:'Host',region:'EU',settings})).data;
+ for(const token of ['b','c'])expect((await f.request(token,`/rooms/${id}/join`,'POST',{name:token})).status).toBe(200);
+ expect((await f.request('a',`/rooms/${id}/seat`,'POST',{play:true})).data.seat).toBe(0);
+ const seats=await Promise.all(['b','c'].map(token=>f.request(token,`/rooms/${id}/seat`,'POST',{play:true})));expect(seats.map(s=>s.status).sort()).toEqual([200,409]);
+ expect((await f.request('d',`/rooms/${id}/chat`,'POST',{message:'Not a member'})).status).toBe(403);
+ expect((await f.request('b',`/rooms/${id}/chat`,'POST',{message:'<script>test</script>'})).status).toBe(200);
+ const state=(await f.request('a',`/rooms/${id}/state`)).data;expect(state.chat[0].message).toBe('<script>test</script>');
+ expect((await f.request('b',`/rooms/${id}/signals`,'POST',{data:{type:'offer',sdp:'test'}})).status).toBe(200);
+ expect((await f.request('a',`/rooms/${id}/signals`)).data.signals).toHaveLength(1);expect((await f.request('c',`/rooms/${id}/signals`)).data.signals).toHaveLength(0);
+ }finally{f.sql.close();}
+});
+test('automatic matching pairs within the region and stale hosts disappear',async()=>{
+ const f=await fixture();try{
+ const create=(token:string,region:string)=>f.request(token,'/rooms','POST',{name:'Quick match',playerName:token,region,settings,auto:true});
+ const a=await create('a','EU'),b=await create('b','NA'),c=await create('c','EU');expect(a.data.id).toBe(c.data.id);expect(b.data.id).not.toBe(c.data.id);expect(c.data.seat).toBe(-1);
+ f.sql.query('UPDATE rooms SET expires_at=0 WHERE id=?').run(a.data.id);
+ const list=(await f.request('d','/rooms')).data.rooms;expect(list).toHaveLength(1);expect(list[0].region).toBe('NA');
+ }finally{f.sql.close();}
+});
+test('host can spectate while both seats are held by guests, and a playing member can return to spectating',async()=>{
+ const f=await fixture();try{
+ const created=await f.request('a','/rooms','POST',{name:'Spectator host',playerName:'Host',region:'EU',settings});expect(created.data.seat).toBe(-1);const id=created.data.id;
+ for(const key of ['b','c'])await f.request(key,`/rooms/${id}/join`,'POST',{name:key});
+ const seats=await Promise.all(['b','c'].map(key=>f.request(key,`/rooms/${id}/seat`,'POST',{play:true})));expect(seats.map(v=>v.data.seat).sort()).toEqual([0,1]);
+ await f.request('a',`/rooms/${id}/phase`,'PUT',{phase:'playing'});
+ expect((await f.request('b',`/rooms/${id}/seat`,'POST',{play:false})).data.seat).toBe(-1);
+ expect((await f.request('a',`/rooms/${id}/seat`,'POST',{play:true})).status).toBe(409);
+ }finally{f.sql.close();}
+});
+test('room weapon availability is host-owned, validated and persisted',async()=>{
+ const f=await fixture();try{const {id}=(await f.request('a','/rooms','POST',{name:'Weapon pool',playerName:'Host',region:'EU',settings})).data;
+ await f.request('b',`/rooms/${id}/join`,'POST',{name:'Guest'});
+ const change=(token:string,pool:number[])=>f.request(token,`/rooms/${id}/settings`,'PUT',{name:'Weapon pool',settings:{...settings,allowedWeapons:pool}});
+ expect((await change('b',[1])).status).toBe(403);expect((await change('a',[])).status).toBe(400);expect((await change('a',[41])).status).toBe(400);expect((await change('a',[1,5,9])).status).toBe(200);
+ expect((await f.request('b',`/rooms/${id}/state`)).data.settings.allowedWeapons).toEqual([1,5,9]);
+ }finally{f.sql.close();}
+});

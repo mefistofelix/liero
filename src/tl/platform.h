@@ -60,6 +60,8 @@
 #  define TL_X86_64 1
 # elif defined(__i386__) || defined(_M_IX86) || defined(i386) || defined(i486) || defined(intel) || defined(x86) || defined(i86pc)
 #  define TL_X86 1
+# elif defined(__EMSCRIPTEN__)
+#  define TL_WASM 1
 # elif defined(__arm__) || defined(_M_ARM)
 #  define TL_ARM 1
 # elif defined(__aarch64__) || defined(_M_ARM64)
@@ -70,7 +72,7 @@
 #endif
 
 #if !TL_LITTLE_ENDIAN && !TL_BIG_ENDIAN
-# if TL_X86 || TL_X86_64 || TL_ARM || TL_ARM_64
+# if TL_X86 || TL_X86_64 || TL_ARM || TL_ARM_64 || TL_WASM
 #  define TL_LITTLE_ENDIAN 1
 # else
 #  define TL_BIG_ENDIAN 1

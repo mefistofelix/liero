@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.21)
 project(openliero)
 
-find_package(SDL2 REQUIRED)
-find_package(SDL2_Image REQUIRED)
+if(EMSCRIPTEN)
+    add_compile_options(-sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -fexceptions -fwrapv)
+else()
+    find_package(SDL2 REQUIRED)
+    find_package(SDL2_Image REQUIRED)
+endif()
 include_directories(
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/ffmpeg)
@@ -90,7 +94,10 @@ set(VIDEO_TOOL_SOURCES ${SOURCES}
     src/video_tool/video_recorder.c
 )
 
-if(APPLE)
+if(EMSCRIPTEN)
+    list(REMOVE_ITEM GAME_SOURCES src/game/main.cpp)
+    list(APPEND GAME_SOURCES src/web/bridge.cpp)
+elseif(APPLE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
     set(GAME_SOURCES ${GAME_SOURCES} src/game/SDLmain.m)
     set_source_files_properties(src/game/SDLmain.m PROPERTIES COMPILE_FLAGS "-std=c99")
@@ -99,14 +106,32 @@ if(APPLE)
     file(GLOB_RECURSE RESOURCE_FILES pkg/*.cfg pkg/TC/* pkg/*.icns)
 else(APPLE)
     set(GAME_SOURCES ${GAME_SOURCES} src/game/sdlmain.cpp)
-endif(APPLE)
+endif()
 
-add_executable(openliero WIN32 ${GAME_SOURCES} ${RESOURCE_FILES} pkg/win32_icon.rc)
+if(EMSCRIPTEN)
+    option(LIERO_JS_ONLY "Emit JavaScript instead of WebAssembly" ON)
+    add_executable(openliero ${GAME_SOURCES})
+    set_target_properties(openliero PROPERTIES SUFFIX ".mjs")
+    target_link_options(openliero PRIVATE
+        -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 "-sSDL2_IMAGE_FORMATS=['png']"
+        -sMODULARIZE=1 -sEXPORT_ES6=1 -sALLOW_MEMORY_GROWTH=1
+        -sENVIRONMENT=web,node -sDISABLE_EXCEPTION_CATCHING=0
+        -sCASE_INSENSITIVE_FS=1
+        "-sEXPORTED_RUNTIME_METHODS=['HEAPU8','HEAP32','FS']"
+        --preload-file "${PROJECT_SOURCE_DIR}/TC/openliero@/TC/openliero")
+    if(LIERO_JS_ONLY)
+        target_link_options(openliero PRIVATE -sWASM=0)
+    endif()
+else()
+    add_executable(openliero WIN32 ${GAME_SOURCES} ${RESOURCE_FILES} pkg/win32_icon.rc)
+    target_link_libraries(openliero SDL2::SDL2 SDL2_image::SDL2_image)
+endif()
 add_executable(tctool ${TC_TOOL_SOURCES})
 add_executable(videotool EXCLUDE_FROM_ALL ${VIDEO_TOOL_SOURCES})
-target_link_libraries(openliero SDL2::SDL2 SDL2_image::SDL2_image)
-target_link_libraries(tctool SDL2::SDL2)
-target_link_libraries(videotool SDL2::SDL2 avcodec avformat avutil dl pthread swresample swscale x264)
+if(NOT EMSCRIPTEN)
+    target_link_libraries(tctool SDL2::SDL2)
+    target_link_libraries(videotool SDL2::SDL2 avcodec avformat avutil dl pthread swresample swscale x264)
+endif()
 include_directories(src/game)
 
 if(APPLE)

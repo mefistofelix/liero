@@ -1,0 +1,8 @@
+const CACHE='liero-arena-v2';
+const ASSETS=['/','/client.js','/style.css','/liero.ttf','/engine/openliero.mjs','/engine/openliero.data','/maps/temple.lev','/manifest.webmanifest','/icon-192.png','/icon-512.png','/favicon.svg'];
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS))));
+self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('liero-arena-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
+self.addEventListener('fetch',event=>{
+ const url=new URL(event.request.url);if(event.request.method!=='GET'||url.origin!==self.location.origin||!ASSETS.includes(url.pathname)&&!/^\/maps\/(levels|previews)\/[a-f0-9]{64}\.(lev|png)$/.test(url.pathname))return;
+ event.respondWith(fetch(event.request).then(response=>{if(response.ok){const copy=response.clone();event.waitUntil(caches.open(CACHE).then(cache=>cache.put(event.request,copy)));}return response;}).catch(()=>caches.match(event.request).then(response=>response||new Response('Offline asset unavailable',{status:503}))));
+});

@@ -351,6 +351,8 @@ struct Worm : gvl::shared
 
 	int hotspotX, hotspotY;      //Hotspots for laser, laser sight, etc.
 	fixed aimingAngle, aimingSpeed;
+	// Only the absolute mouse-input adapter opts out of keyboard auto-facing.
+	bool externalAim = false;
 
 	//Controls controls;
 	bool ableToJump, ableToDig;   //The previous state of some keys

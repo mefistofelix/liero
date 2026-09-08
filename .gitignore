@@ -1,3 +1,14 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+dist/
+.tools/
+research/
+upstream/
+bun.exe
+.local/
+game/
 # build files
 /_bin/
 /out/
@@ -35,7 +46,17 @@ cmake_install.cmake
 /liero.cfg
 /orbmit.cfg
 /original.cfg
+/build-js/
+/build-wasm/
+node_modules/
+.wrangler/
+.env*
+!.env.example
+dist/
+*.log
+*.tsbuildinfo
 
 # copied manually for building/running project
 /_build/*icon*.png
 /_build/liero.icns
+/TEMPLE.LEV
