@@ -19,9 +19,10 @@ let module:EngineModule,game:LocalGame,maps:MapLibrary,weapons:WeaponLibrary,pla
 let stats=new Int32Array(20),activeLoadouts=prefs.loadouts.map(a=>[...a]),playerNames=[prefs.name,'Bot'];
 let round:NetworkRound|undefined,setup:any,staging:any,peerLoadouts=new Map<string,number[]>(),peerPings:Record<string,number>={};
 let nextMapId:string|undefined;
+let templeData:Uint8Array;
 let mapData:Uint8Array|null=null,roundTimeout=0,busy=false,roomListVersion=0,quickMatching=false;
 const save=()=>{try{savePreferences(prefs);}catch{notice('Browser storage is unavailable. Preferences could not be saved.');}};
-const arena=new ArenaUI({room,game:()=>game,engine:()=>module,weapons:()=>weapons,names:()=>playerNames,playing:()=>playing,seat:()=>room.id?room.seat:playing?0:-1,sound:()=>prefs.sound,setSound:enabled=>{prefs.sound=enabled;save();game?.setSound(enabled);},join:async()=>{if(!room.id){await autoConnect();return;}await room.call('seat','POST',{play:true});notice('Player slot reserved. You can play while waiting for others.');},spectate:async()=>{if(room.id){await room.call('seat','POST',{play:false});if(round){round.ended=true;game.stop();playing=false;}}else{game.stop();playing=false;game.preview();}el('hud').hidden=true;},copy:()=>copyInvite()});
+const arena=new ArenaUI({room,game:()=>game,engine:()=>module,weapons:()=>weapons,names:()=>playerNames,playing:()=>playing,seat:()=>room.id?room.seat:playing?0:-1,sound:()=>prefs.sound,setSound:enabled=>{prefs.sound=enabled;save();game?.setSound(enabled);},join:async()=>{if(!room.id){await autoConnect();return;}await room.call('seat','POST',{play:true});closeMenus();notice('Player slot reserved. You can play while waiting for others.');},spectate:async()=>{if(room.id){await room.call('seat','POST',{play:false});if(round){round.ended=true;game.stop();playing=false;}}else{game.stop();playing=false;game.preview();}el('hud').hidden=true;},copy:()=>copyInvite()});
 const saveWeapons=()=>{save();if(room.id&&!room.host)room.send(room.room!.owner,{type:'loadout',loadout:prefs.loadouts[0]});};
 controlsUI(prefs,save,()=>game?.setControls(prefs.controls));
 const guard=async(fn:()=>Promise<void>)=>{if(busy)return;busy=true;try{await fn();}finally{busy=false;}};
@@ -35,7 +36,7 @@ function applyRules(rules:Rules,loadouts:number[][],colors:string[],data:Uint8Ar
  for(let p=0;p<2;p++){for(let s=0;s<5;s++)module._liero_loadout(p,s,loadouts[p][s]);const color=/^#[0-9a-f]{6}$/i.test(colors[p])?colors[p]:'#6868fc';module._liero_color(p,parseInt(color.slice(1,3),16)>>2,parseInt(color.slice(3,5),16)>>2,parseInt(color.slice(5,7),16)>>2);}
  activeLoadouts=loadouts.map(a=>[...a]);
 }
-function showGame(){arena.reset();playing=true;el('overlay').hidden=true;el('hud').hidden=localTwo||!!round?.spectator;el('spectator-tools').hidden=!round?.spectator;el<HTMLButtonElement>('record-start').disabled=!recorder.supported();if(!round)closeMenus();}
+function showGame(){arena.reset();playing=true;el('overlay').hidden=true;el('hud').hidden=localTwo||!!round?.spectator;el('spectator-tools').hidden=!round?.spectator;el<HTMLButtonElement>('record-start').disabled=!recorder.supported();if(!round||el<HTMLDialogElement>('rooms-menu').open)closeMenus();}
 function endGame(){playing=false;arena.reset();el('hud').hidden=true;el('spectator-tools').hidden=true;if(room.id){notice('Round complete. Waiting for the next round.');el('round-status').textContent='Round complete. The next round uses the next map in the rotation.';}else{el('overlay').hidden=false;el('welcome-status').textContent='Round complete. Play again on the next map.';}}
 async function startLocal(two=false){await guard(async()=>{if(!module)return;if(room.id)await leaveRoom();clearTimeout(roundTimeout);roundTimeout=0;round=undefined;setup=undefined;const next=await maps.next();mapData=next.data;localTwo=two;follow=0;playerNames=[prefs.name,two?'Player 2':'Bot'];applyRules(prefs.rules,prefs.loadouts,[prefs.color,'#3cac3c'],mapData);el('map-name').textContent=next.level.name;game.start(two,prefs.keyboardOnly);showGame();});}
 click('quick-bot',()=>startLocal());click('play-bot',()=>startLocal());click('play-local',()=>startLocal(true));
@@ -64,10 +65,10 @@ async function refreshRooms(){
 function roomTab(tab='explore'){for(const name of ['explore','create','local']){el(name+'-panel').hidden=name!==tab;el(name+'-tab').setAttribute('aria-selected',String(name===tab));}}
 click('explore-tab',()=>roomTab());click('create-tab',()=>roomTab('create'));click('local-tab',()=>roomTab('local'));
 onMenu('rooms-menu',()=>{roomTab();return refreshRooms();});click('refresh-rooms',refreshRooms);
-async function createRoom(auto=false){await guard(async()=>{if(room.id)await leaveRoom();if(!prefs.rotation.length)throw new Error('Enable at least one map.');prefs.roomName=input('room-name').value.trim()||'My room';prefs.privateRoom=input('private-room').checked;save();game?.stop();playing=false;round=undefined;setup=undefined;quickMatching=auto;await room.create({...prefs,privateRoom:auto?false:prefs.privateRoom},false);el('overlay').hidden=true;if(!auto)closeMenus();waitingPreview();});}
-async function joinRoom(id:string,invite:string,automatic=false){await guard(async()=>{if(!module)throw new Error('Wait for the game to finish loading.');if(room.id)await leaveRoom();game.stop();playing=false;round=undefined;setup=undefined;await room.join(id,invite,prefs);el('overlay').hidden=true;if(!automatic)closeMenus();waitingPreview();});}
+async function createRoom(auto=false){await guard(async()=>{if(room.id)await leaveRoom();if(!prefs.rotation.length)throw new Error('Enable at least one map.');prefs.roomName=input('room-name').value.trim()||'My room';prefs.privateRoom=input('private-room').checked;save();game?.stop();playing=false;round=undefined;setup=undefined;quickMatching=auto;await room.create({...prefs,privateRoom:auto?false:prefs.privateRoom},false);el('overlay').hidden=true;closeMenus();waitingPreview();});}
+async function joinRoom(id:string,invite:string,automatic=false){await guard(async()=>{if(!module)throw new Error('Wait for the game to finish loading.');if(room.id)await leaveRoom();game.stop();playing=false;round=undefined;setup=undefined;await room.join(id,invite,prefs);el('overlay').hidden=true;closeMenus();waitingPreview();});}
 click('create-room',()=>createRoom());click('quick-match',()=>autoConnect());
-function waitingPreview(){if(!module||playing)return;module._liero_options(0,15,100,0,0);game.preview();el('hud').hidden=true;arena.nextCamera(true);}
+function waitingPreview(){if(!module||!templeData||playing)return;module.FS.writeFile('/import.lev',templeData);module._liero_options(0,15,100,0,1);game.preview();el('map-name').textContent='TEMPLE.LEV';el('hud').hidden=true;arena.nextCamera(true);}
 async function autoConnect(){
  el('welcome-status').textContent='Finding the closest public room…';el('connection').textContent='Finding the closest public room…';
  const {rooms}=await api('/rooms'),candidates:Room[]=rooms.filter((r:Room)=>r.count<r.capacity&&r.id!==room.id),measured:{room:Room;ping:number}[]=[];let next=0;
@@ -82,7 +83,7 @@ const inviteURL=()=>location.origin+'/#room='+room.id+(room.room?.private?'&invi
 async function copyInvite(){if(!room.id){notice('Join a room first.');return;}const url=inviteURL();input('invite-link').value=url;input('invite-link').hidden=false;try{await navigator.clipboard.writeText(url);notice('Invite link copied.');}catch{input('invite-link').select();openMenu('rooms-menu');el('room-browser').prepend(input('invite-link'));notice('Select and copy this invite link.');}}
 click('copy-invite',copyInvite);
 form('chat-form',async()=>{const message=input('chat-message').value.trim();if(!message)return;await room.call('chat','POST',{message});input('chat-message').value='';});
-click('take-seat',async()=>{await room.call('seat','POST',{play:room.seat<0});notice('Your player slot has been updated for the next round.');});
+click('take-seat',async()=>{await room.call('seat','POST',{play:room.seat<0});closeMenus();notice('Your player slot has been updated for the next round.');});
 async function saveRoomSettings(){if(room.host)await room.call('settings','PUT',{name:prefs.roomName,private:prefs.privateRoom,settings:{...prefs.rules,rotation:prefs.rotation}});}
 function pingFor(id:string){if(id===room.room?.owner)return 0;return room.host?room.pings.get(id):peerPings[id];}
 function renderRoom(r:Room){
@@ -129,12 +130,12 @@ async function startOnline(mapId?:string,restart=false){await guard(async()=>{
 async function switchRoomMap(level:Level){
  if(!room.host||!room.room)throw new Error('Only the host can change the map.');
  const players=room.room.members.filter(m=>m.seat>=0);
- if(players.length>0&&players.every(m=>m.id===room.room!.self||peerLoadouts.has(m.id))){await startOnline(level.id,true);notice('Started '+level.name+' for everyone.');return;}
+ if(players.length>0&&players.every(m=>m.id===room.room!.self||peerLoadouts.has(m.id))){await startOnline(level.id,true);closeMenus();notice('Started '+level.name+' for everyone.');return;}
  await guard(async()=>{const data=await levelBytes(level);await saveRoomSettings();clearTimeout(roundTimeout);roundTimeout=0;await room.call('phase','PUT',{phase:'lobby'});nextMapId=level.id;
  const value={version:1,preview:true,id:crypto.randomUUID(),seed:crypto.getRandomValues(new Uint32Array(1))[0],rules:{...prefs.rules},loadouts:prefs.loadouts.map(a=>[...a]),colors:[prefs.color,'#3cac3c'],players:[prefs.name,'Player 2'],map:{name:level.name,bytes:data?.length||0}};
  launchNetwork(value,data);for(const member of room.room!.members)if(member.id!==room.room!.self)sendSetup(member.id);notice('Changed to '+level.name+'. Press Play to start.');});
 }
-click('start-round',()=>startOnline());
+click('start-round',async()=>{await startOnline();closeMenus();});
 room.onPacket=(from,packet)=>{
  try{
   if(packet.type==='loadout'&&room.host&&validLoadout(packet.loadout)&&room.room?.members.some(m=>m.id===from)){peerLoadouts.set(from,packet.loadout);return;}
@@ -173,7 +174,8 @@ if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch
 window.addEventListener('pagehide',()=>{recorder.stop();game?.dispose();});
 window.addEventListener('beforeunload',event=>{if(recorder.active){event.preventDefault();event.returnValue='';}});
 loadEngine().then(async engine=>{
- module=engine;weapons=new WeaponLibrary(module,prefs,saveWeapons);const ptr=module._liero_palette();roomWeapons(room,prefs,weapons,save,saveRoomSettings);maps=new MapLibrary(prefs,()=>{save();if(room.host)saveRoomSettings().catch(report);},module.HEAPU8.slice(ptr,ptr+1024),{canSwitch:()=>room.host,switchMap:switchRoomMap});await maps.init();game=new LocalGame(module,canvas,endGame,renderStats);game.setControls(prefs.controls);game.setSound(prefs.sound);
+ module=engine;weapons=new WeaponLibrary(module,prefs,saveWeapons);const ptr=module._liero_palette();roomWeapons(room,prefs,weapons,save,saveRoomSettings);maps=new MapLibrary(prefs,()=>{save();if(room.host)saveRoomSettings().catch(report);},module.HEAPU8.slice(ptr,ptr+1024),{canSwitch:()=>room.host,switchMap:switchRoomMap});await maps.init();templeData=(await maps.pick('temple')).data!;game=new LocalGame(module,canvas,endGame,renderStats);game.setControls(prefs.controls);game.setSound(prefs.sound);
  document.querySelectorAll<HTMLButtonElement>('.requires-engine').forEach(b=>b.disabled=false);el('welcome-status').textContent='Aim, dig and swing. The whole arena is yours.';
- const params=new URLSearchParams(location.hash.slice(1)),id=params.get('room');try{if(id)await joinRoom(id,params.get('invite')||'');else await autoConnect();}catch(error){el('welcome-status').textContent='Could not connect. Browse rooms or play locally.';notice(error instanceof Error?error.message:String(error));}
+ waitingPreview();el('overlay').hidden=true;el('connection').textContent='Choose a room or start a local game';
+ const params=new URLSearchParams(location.hash.slice(1)),id=params.get('room');try{if(id)await joinRoom(id,params.get('invite')||'');else openMenu('rooms-menu');}catch(error){openMenu('rooms-menu');notice(error instanceof Error?error.message:String(error));}
 }).catch(error=>{el('welcome-status').textContent='The game could not load. Reload to try again.';report(error);});

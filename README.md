@@ -10,8 +10,9 @@ audio and input.
 [Open the hosted game](https://liero.haxthepax.chatgpt.site/).
 The hosted game is public.
 
-The game joins the reachable public room with the lowest measured ping.
-If no room is reachable, it creates one. Everyone enters as a spectator; select
+The game opens Room explorer over Temple, the default map. Choose a room, create
+one, or use **Find nearest room** to join the reachable public room with the
+lowest ping (or create one if none is reachable). Everyone enters as a spectator; select
 **Join game** to play. Rooms support up to 16 people, including spectators, with
 up to two active players to preserve the original engine. You can start alone and
 play while waiting, with no inactive opponent or match completion. When a second

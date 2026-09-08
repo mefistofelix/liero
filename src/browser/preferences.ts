@@ -5,9 +5,11 @@ export type Rules={mode:number;lives:number;loading:number;bonuses:number;allowe
 export type Controls={mouse:string[];keyboard:string[][]};
 export const defaultControls:Controls={mouse:['KeyA','KeyD','KeyW','KeyS','Space','KeyF'],keyboard:[['KeyW','KeyS','KeyA','KeyD','KeyF','KeyG','Space'],['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ControlRight','Enter','ShiftRight']]};
 export type Preferences={name:string;color:string;roomName:string;privateRoom:boolean;sound:boolean;keyboardOnly:boolean;loadouts:number[][];rules:Rules;rotation:string[];controls:Controls};
-export const defaults:Preferences={name:'Player',color:'#6868fc',roomName:'My room',privateRoom:false,sound:true,keyboardOnly:true,loadouts:[[1,8,15,22,29],[1,8,15,22,29]],rules:{mode:0,lives:15,loading:100,bonuses:4},rotation:['random','temple'],controls:defaultControls};
+export const defaults:Preferences={name:'Player',color:'#6868fc',roomName:'My room',privateRoom:false,sound:true,keyboardOnly:true,loadouts:[[1,8,15,22,29],[1,8,15,22,29]],rules:{mode:0,lives:15,loading:100,bonuses:4},rotation:['temple'],controls:defaultControls};
 export function readPreferences():Preferences{
  let value:any={};try{value=JSON.parse(localStorage.getItem('liero.preferences.v1')||'{}')||{};}catch{}
+ // Migrate only the previous factory rotation; retain customized map pools.
+ if(value.defaultsVersion!==2&&JSON.stringify(value.rotation)==='["random","temple"]')value.rotation=[...defaults.rotation];
  const number=(v:unknown,min:number,max:number,fallback:number)=>Number.isInteger(v)&&Number(v)>=min&&Number(v)<=max?Number(v):fallback;
  const text=(v:unknown,fallback:string,max:number)=>typeof v==='string'&&v.trim()?v.trim().slice(0,max):fallback;
  const bindings=(v:unknown,fallback:string[])=>fallback.map((key,index)=>Array.isArray(v)&&typeof v[index]==='string'&&/^[A-Za-z0-9]{1,30}$/.test(v[index])&&!['Escape','Tab'].includes(v[index])?v[index]:key);
@@ -17,4 +19,4 @@ export function readPreferences():Preferences{
  controls:{mouse:bindings(value.controls?.mouse,defaultControls.mouse),keyboard:defaultControls.keyboard.map((keys,p)=>bindings(value.controls?.keyboard?.[p],keys))},
  rotation:Array.isArray(value.rotation)&&value.rotation.length&&value.rotation.length<=1000?value.rotation.filter((x:unknown)=>typeof x==='string'&&x.length<180):[...defaults.rotation]};
 }
-export function savePreferences(value:Preferences){localStorage.setItem('liero.preferences.v1',JSON.stringify(value));}
+export function savePreferences(value:Preferences){localStorage.setItem('liero.preferences.v1',JSON.stringify({...value,defaultsVersion:2}));}

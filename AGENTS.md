@@ -125,8 +125,11 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - Worm labels display the player name, with two thin bars below it for health and
   current-weapon reload progress, including while spectating. Use original engine
   health limits and reload timers. Your weapon name briefly replaces your name on change.
-- Startup: choose the reachable public room with the lowest measured RTT worldwide;
-  create a public room if none is reachable. There is NO region selector or region
+- Startup: display Temple and open Room explorer on the Explore tab. Joining or
+  creating a room and explicit Play actions close the popup. Invite links join directly.
+  Find nearest room chooses the lowest measured RTT worldwide and creates a public
+  room if none is reachable. Temple is the default rotation; preserve custom pools.
+  There is NO region selector or region
   requirement. Explorer defaults to people descending, then ping ascending; columns
   are sortable and Show empty/Show full filters toggle inclusion. Flags are informative.
 - Room and player flags use bundled SVG files. Obtain country from request.cf or

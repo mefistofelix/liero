@@ -46,9 +46,9 @@ Hosting attivo su https://liero.haxthepax.chatgpt.site/ (Cloudflare Worker + D1)
 ## Stanze e browser
 
 Le stanze usano il contratto SQL D1 in locale: elenco pubblico, inviti privati,
-chat, heartbeat e signaling SDP/ICE. All’avvio il client misura RTT delle stanze pubbliche
-in tutto il mondo e sceglie il ping minimo. In assenza di host raggiungibili crea una
-stanza pubblica. Tutti entrano da spettatori; due posti di gioco sono distinti
+chat, heartbeat e signaling SDP/ICE. All’avvio si apre Room explorer con Temple sullo sfondo. Find nearest room
+misura RTT delle stanze pubbliche in tutto il mondo e sceglie il ping minimo.
+In assenza di host raggiungibili crea una stanza pubblica. Tutti entrano da spettatori; due posti di gioco sono distinti
 dalla proprietà della stanza. Il pulsante Play prenota un posto disponibile.
 Un solo player pronto avvia subito il gioco: il posto vuoto è eliminato tramite
 l'adapter e la fine partita viene sospesa. La simulazione originale continua con
