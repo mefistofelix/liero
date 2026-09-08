@@ -143,7 +143,7 @@ export class LocalGame {
   }
   private frame = (time: number) => {
     const menu=!!document.querySelector('dialog[open],#chat-compose:not([hidden])');
-    if(this.paused||(menu&&!this.network)){this.clear();this.raf=requestAnimationFrame(this.frame);return;}
+    if(this.paused){this.clear();this.raf=requestAnimationFrame(this.frame);return;}
     if(menu){this.keys.clear();this.pendingKeys.clear();this.buttons=0;this.pendingButtons=0;this.wheel=0;}
     this.network?.catchUp();
     if (!this.last) this.last = time;
