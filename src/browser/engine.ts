@@ -62,13 +62,19 @@ export class LocalGame {
     canvas.addEventListener('pointerdown', event => {
       event.preventDefault(); canvas.focus(); this.point(event);
       canvas.setPointerCapture(event.pointerId);
-      this.buttons = event.buttons;
-      this.pendingButtons|=event.button===0?1:event.button===2?2:0;
     }, opts);
+    // Pointerdown fires only for the first mouse button; mousedown includes chords.
+    canvas.addEventListener('mousedown', event => {
+      event.preventDefault();
+      this.buttons = event.buttons;
+      this.pendingButtons|=event.button===0?1:event.button===2?2:event.button===1?4:0;
+    }, opts);
+    window.addEventListener('mouseup', event => {this.buttons=event.buttons;}, opts);
     canvas.addEventListener('pointerup', event => {this.buttons = event.buttons;}, opts);
     canvas.addEventListener('pointercancel', this.clear, opts);
     canvas.addEventListener('lostpointercapture', () => {this.buttons=0;}, opts);
     canvas.addEventListener('contextmenu', e => e.preventDefault(), opts);
+    canvas.addEventListener('auxclick', e => e.preventDefault(), opts);
     canvas.addEventListener('wheel', event => {
       event.preventDefault(); this.wheel += Math.sign(event.deltaY);
       this.wheel = Math.max(-5, Math.min(5, this.wheel));
@@ -141,7 +147,7 @@ export class LocalGame {
     while (this.debt >= 1000/70) {
       const down=(index:number)=>this.keys.has(this.controls.mouse[index])||this.pendingKeys.has(this.controls.mouse[index]);
       const mouse=this.buttons|this.pendingButtons;
-      const b=(down(0)?1:0)|(down(1)?2:0)|(down(4)?4:0)
+      const b=(down(0)?1:0)|(down(1)?2:0)|(down(4)||(mouse&4)?4:0)
         |((mouse&1)||down(5)?8:0)|((mouse&2)?16:0)|(down(2)?64:0)|(down(3)?128:0);
       const consumesInput=!this.network||this.network.needsInput;
       const wheel = Math.sign(this.wheel);if(consumesInput)this.wheel-=wheel;

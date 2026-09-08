@@ -72,11 +72,12 @@ static void input(int p,int buttons,int angle,int wheel){
     w.direction=cossinTable[angle&127].x>=0?1:0;
     w.setControlState(Worm::Left,buttons&1); w.setControlState(Worm::Right,buttons&2);
     w.setControlState(Worm::Jump,buttons&4); w.setControlState(Worm::Fire,buttons&8);
+    if(buttons&4)w.ninjarope.out=w.ninjarope.attached=false;
     bool hanging=w.ninjarope.out&&w.ninjarope.attached;
     bool right=(buttons&16)!=0;
     if(right&&!rightDown[p]){
         rightMode[p]=dirtInFront(g,w)?1:2;
-        if(rightMode[p]==2){
+        if(rightMode[p]==2&&!(buttons&4)){
             if(w.ninjarope.out) w.ninjarope.out=w.ninjarope.attached=false;
             else {
                 w.release(Worm::Left);w.release(Worm::Right);

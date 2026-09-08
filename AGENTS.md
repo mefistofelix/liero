@@ -7,6 +7,9 @@
 - Rendering, audio, local input, remote input, lobby and transport are platform
   adapters. Do not approximate or redesign the simulation for convenience.
 - Mouse aiming; left button fires; wheel changes weapon.
+- Mouse buttons work together: fire remains active while holding right click,
+  adjusting the rope or scrolling weapons. Middle click jumps/releases rope like
+  Space; explicit release also wins while scrolling. Keyboard-only behavior stays original.
 - Default movement is WASD, with key bindings editable in Settings, including
   both local keyboard profiles. W jumps normally and shortens the rope when
   attached; S means down/extend rope and MUST NOT dig. Space explicitly jumps

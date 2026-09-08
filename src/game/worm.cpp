@@ -359,7 +359,7 @@ void Worm::process(Game& game)
 			processTasks(game);
 			processWeapons(game);
 
-			if(pressed(Fire) && !pressed(Change)
+			if(pressed(Fire) && (!pressed(Change) || externalAim)
 			&& weapons[currentWeapon].available()
 			&& weapons[currentWeapon].delayLeft <= 0)
 			{

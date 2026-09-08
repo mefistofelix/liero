@@ -38,6 +38,13 @@ test('worm bars expose each player health limit and original reload timer indepe
  expect(seen).toEqual([true,true]);const hash=m._liero_hash(),offset=m._liero_info()>>2,values=Array.from(m.HEAP32.subarray(offset+46,offset+52));m._liero_player(1);m._liero_info();expect(Array.from(m.HEAP32.subarray(offset+46,offset+52))).toEqual(values);expect(m._liero_hash()).toBe(hash);
 });
 
+test('mouse fire works with rope and wheel modifiers, and explicit release wins during scrolling',async()=>{
+ const ready=async()=>{const m=await fresh();for(let slot=0;slot<5;slot++)m._liero_loadout(0,slot,1);m._liero_start(321,0);for(let f=0;f<300;f++)m._liero_step(0,64,0,0,64,0);return m;};
+ const rope=await ready(),ptr=rope._liero_info()>>2,ammo=rope.HEAP32[ptr+12];rope._liero_step(8|16,64,0,0,64,0);rope._liero_info();expect(rope.HEAP32[ptr+12]).toBe(ammo-1);expect(rope.HEAP32[ptr+5]).toBe(1);
+ rope._liero_step(4|16,64,1,0,64,0);rope._liero_info();expect(rope.HEAP32[ptr+5]).toBe(0);
+ const wheel=await ready(),offset=wheel._liero_info()>>2,before=wheel.HEAP32[offset+12],slot=wheel.HEAP32[offset+4];wheel._liero_step(8,64,1,0,64,0);wheel._liero_info();expect(wheel.HEAP32[offset+4]).toBe((slot+1)%5);wheel._liero_step(0,64,-1,0,64,0);wheel._liero_info();expect(wheel.HEAP32[offset+12]).toBe(before-1);
+});
+
 test('original weapon availability restricts all five slots to the room pool',async()=>{
  const m=await fresh();for(let id=1;id<=40;id++)m._liero_allowed(id,id===1?1:0);m._liero_start(33,0);
  for(let n=0;n<5;n++){m._liero_step(0,96,1,0,32,0);m._liero_step(0,96,0,0,32,0);const p=m._liero_info()>>2;expect(m._liero_weapon_id(m.HEAP32[p+14])).toBe(1);}
