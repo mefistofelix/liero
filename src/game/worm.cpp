@@ -360,6 +360,7 @@ void Worm::process(Game& game)
 			processWeapons(game);
 
 			if(pressed(Fire) && (!pressed(Change) || externalAim)
+			&& (!game.browserWeaponRules || game.settings->weapTable[weapons[currentWeapon].type-&common.weapons[0]] == 0)
 			&& weapons[currentWeapon].available()
 			&& weapons[currentWeapon].delayLeft <= 0)
 			{
@@ -1214,6 +1215,13 @@ void Worm::processAiming(Game& game)
 
 void Worm::processWeaponChange(Game& game)
 {
+    auto choose = [&](int direction){
+        int next=currentWeapon;
+        for(int n=0;n<Settings::selectableWeapons;++n){
+            next=(next+direction+Settings::selectableWeapons)%Settings::selectableWeapons;
+            if(!game.browserWeaponRules || game.settings->weapTable[weapons[next].type-&game.common->weapons[0]]==0){currentWeapon=next;return;}
+        }
+    };
 	if(!keyChangePressed)
 	{
 		release(Left);
@@ -1234,8 +1242,7 @@ void Worm::processWeaponChange(Game& game)
 	{
 		if(pressedOnce(Left))
 		{
-			if(--currentWeapon < 0)
-				currentWeapon = Settings::selectableWeapons - 1;
+			choose(-1);
 
 			hotspotX = ftoi(pos.x);
 			hotspotY = ftoi(pos.y);
@@ -1243,8 +1250,7 @@ void Worm::processWeaponChange(Game& game)
 
 		if(pressedOnce(Right))
 		{
-			if(++currentWeapon >= Settings::selectableWeapons)
-				currentWeapon = 0;
+			choose(1);
 
 			hotspotX = ftoi(pos.x);
 			hotspotY = ftoi(pos.y);

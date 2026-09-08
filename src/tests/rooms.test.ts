@@ -38,6 +38,16 @@ test('room discovery is worldwide and stale hosts disappear',async()=>{
  const list=(await f.request('d','/rooms')).data.rooms;expect(list).toHaveLength(0);
  }finally{f.sql.close();}
 });
+test('members update only their own live name and color',async()=>{
+ const f=await fixture();try{
+  const {id}=(await f.request('a','/rooms','POST',{name:'Profile test',playerName:'Host',settings})).data;
+  await f.request('b',`/rooms/${id}/join`,'POST',{name:'Guest'});
+  expect((await f.request('b',`/rooms/${id}/profile`,'PUT',{name:'Renamed',color:'#ff8844',player:'a'})).status).toBe(200);
+  const room=(await f.request('a',`/rooms/${id}/state`)).data;
+  expect(room.members.find(m=>m.name==='Renamed').color).toBe('#ff8844');expect(room.members.some(m=>m.name==='Host')).toBe(true);
+  expect((await f.request('b',`/rooms/${id}/profile`,'PUT',{name:'Bad',color:'red'})).status).toBe(400);
+ }finally{f.sql.close();}
+});
 test('host can spectate while both seats are held by guests, and a playing member can return to spectating',async()=>{
  const f=await fixture();try{
  const created=await f.request('a','/rooms','POST',{name:'Spectator host',playerName:'Host',region:'EU',settings});expect(created.data.seat).toBe(-1);const id=created.data.id;

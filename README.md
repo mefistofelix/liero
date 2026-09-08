@@ -24,6 +24,9 @@ player joins, a synchronized round starts on the same map using the room rules.
 - **Maps:** 897 bundled levels with previews, plus drag-and-drop LEV, Powerlevel
   and common image imports. Levels are served from our hosting, not third parties.
 - **Profile:** save your name, worm color, five-weapon loadout and key bindings locally.
+  A random initial color is saved automatically; name and color changes apply live.
+- **Play / Stop:** Stop commits a suicide and returns you to spectating; Play rejoins.
+- **Default weapons:** Gauss Gun, Larpa, Chiquita Bomb, Spikeballs and Shotgun.
 - **Local play:** practice against the bot or use the original split screen on one keyboard.
 - **Recordings:** capture gameplay or live spectating, then replay/download MP4
   from the local archive where the browser supports MP4 encoding.
@@ -38,15 +41,15 @@ player joins, a synchronized round starts on the same map using the room rules.
 | S | Down / extend the attached rope |
 | Mouse | Aim |
 | Left click | Fire, including while using right click or the wheel |
-| Right click | Dig when dirt is immediately ahead; otherwise throw/release rope |
+| Right click | Dig when dirt is immediately ahead; otherwise throw/rethrow rope |
 | Mouse wheel | Change weapon |
 | Space / middle click | Jump / release rope |
-| T | Open room chat |
+| Enter | Open room chat / send message |
 | Tab | Leaderboard |
 | Escape | Open/close menus |
 
 Keyboard bindings can be changed in your profile. Names have health and reload
-bars; your weapon name appears briefly when changing weapons. Respawning preserves
+bars; the name stays visible when changing weapons. Respawning preserves
 weapon ammunition and reload state, as in the original engine.
 
 ## Run locally

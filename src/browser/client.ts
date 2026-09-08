@@ -1,9 +1,9 @@
 import {loadEngine,LocalGame,type EngineModule} from './engine.ts';
-import {readPreferences,savePreferences,weaponPool,permittedLoadout,type Rules} from './preferences.ts';
+import {readPreferences,savePreferences,weaponPool,type Rules} from './preferences.ts';
 import {MapLibrary} from './maps-ui.ts';
 import {WeaponLibrary} from './weapons-ui.ts';
 import {RoomClient,api,probeRoom,type Room} from './rooms.ts';
-import {NetworkRound} from './netgame.ts';
+import {NetworkRound,NETWORK_VERSION,rulesKey,applyLiveRules} from './netgame.ts';
 import {validateLevel,levelBytes,type Level} from './maps.ts';
 import {GameRecorder,listRecordings,deleteRecording,type Recording} from './recordings.ts';
 import {roomWeapons} from './room-weapons.ts';
@@ -19,10 +19,11 @@ let module:EngineModule,game:LocalGame,maps:MapLibrary,weapons:WeaponLibrary,pla
 let stats=new Int32Array(20),activeLoadouts=prefs.loadouts.map(a=>[...a]),playerNames=[prefs.name,'Bot'];
 let round:NetworkRound|undefined,setup:any,staging:any,peerLoadouts=new Map<string,number[]>(),peerPings:Record<string,number>={};
 let nextMapId:string|undefined;
+let stopping=false,lastRulesKey='';
 let templeData:Uint8Array;
 let mapData:Uint8Array|null=null,roundTimeout=0,busy=false,roomListVersion=0,quickMatching=false;
 const save=()=>{try{savePreferences(prefs);}catch{notice('Browser storage is unavailable. Preferences could not be saved.');}};
-const arena=new ArenaUI({room,game:()=>game,engine:()=>module,weapons:()=>weapons,names:()=>playerNames,playing:()=>playing,seat:()=>room.id?room.seat:playing?0:-1,sound:()=>prefs.sound,setSound:enabled=>{prefs.sound=enabled;save();game?.setSound(enabled);},join:async()=>{if(!room.id){await autoConnect();return;}await room.call('seat','POST',{play:true});closeMenus();notice('Player slot reserved. You can play while waiting for others.');},spectate:async()=>{if(room.id){await room.call('seat','POST',{play:false});if(round){round.ended=true;game.stop();playing=false;}}else{game.stop();playing=false;game.preview();}el('hud').hidden=true;},copy:()=>copyInvite()});
+const arena=new ArenaUI({room,game:()=>game,engine:()=>module,weapons:()=>weapons,names:()=>playerNames,playing:()=>playing,seat:()=>room.id?room.seat:playing?0:-1,sound:()=>prefs.sound,setSound:enabled=>{prefs.sound=enabled;save();game?.setSound(enabled);},stopping:()=>stopping,color:()=>prefs.color,join:togglePlay,spectate:async()=>{if(room.id){await room.call('seat','POST',{play:false});if(round){round.ended=true;game.stop();playing=false;}}else{game.stop();playing=false;game.preview();}el('hud').hidden=true;},copy:()=>copyInvite()});
 const saveWeapons=()=>{save();if(room.id&&!room.host)room.send(room.room!.owner,{type:'loadout',loadout:prefs.loadouts[0]});};
 controlsUI(prefs,save,()=>game?.setControls(prefs.controls));
 const guard=async(fn:()=>Promise<void>)=>{if(busy)return;busy=true;try{await fn();}finally{busy=false;}};
@@ -30,21 +31,41 @@ input('player-name').value=prefs.name;input('player-color').value=prefs.color;in
 select('game-mode').value=String(prefs.rules.mode);input('rule-lives').value=String(prefs.rules.lives);input('rule-loading').value=String(prefs.rules.loading);input('rule-bonuses').value=String(prefs.rules.bonuses);
 menuHandler(open=>{if(!open&&playing)canvas.focus();});
 function applyRules(rules:Rules,loadouts:number[][],colors:string[],data:Uint8Array|null){
- const pool=weaponPool(rules.allowedWeapons);loadouts=loadouts.map(list=>permittedLoadout(list,pool));for(let id=1;id<=40;id++)module._liero_allowed(id,pool.includes(id)?1:0);
+ const pool=weaponPool(rules.allowedWeapons);for(let id=1;id<=40;id++)module._liero_allowed(id,pool.includes(id)?1:0);
  if(data)module.FS.writeFile('/import.lev',validateLevel(data));
  module._liero_options(rules.mode,rules.lives,rules.loading,rules.bonuses,data?1:0);
  for(let p=0;p<2;p++){for(let s=0;s<5;s++)module._liero_loadout(p,s,loadouts[p][s]);const color=/^#[0-9a-f]{6}$/i.test(colors[p])?colors[p]:'#6868fc';module._liero_color(p,parseInt(color.slice(1,3),16)>>2,parseInt(color.slice(3,5),16)>>2,parseInt(color.slice(5,7),16)>>2);}
  activeLoadouts=loadouts.map(a=>[...a]);
 }
-function showGame(){arena.reset();playing=true;el('overlay').hidden=true;el('hud').hidden=localTwo||!!round?.spectator;el('spectator-tools').hidden=!round?.spectator;el<HTMLButtonElement>('record-start').disabled=!recorder.supported();if(!round||el<HTMLDialogElement>('rooms-menu').open)closeMenus();}
+function showGame(){arena.reset();playing=true;el('overlay').hidden=true;el('hud').hidden=localTwo||!!round?.spectator;el('spectator-tools').hidden=!round?.spectator;el<HTMLButtonElement>('record-start').disabled=!recorder.supported();if(!round||el<HTMLDialogElement>('rooms-menu').open)closeMenus();arena.playButton();}
 function endGame(){playing=false;arena.reset();el('hud').hidden=true;el('spectator-tools').hidden=true;if(room.id){notice('Round complete. Waiting for the next round.');el('round-status').textContent='Round complete. The next round uses the next map in the rotation.';}else{el('overlay').hidden=false;el('welcome-status').textContent='Round complete. Play again on the next map.';}}
 async function startLocal(two=false){await guard(async()=>{if(!module)return;if(room.id)await leaveRoom();clearTimeout(roundTimeout);roundTimeout=0;round=undefined;setup=undefined;const next=await maps.next();mapData=next.data;localTwo=two;follow=0;playerNames=[prefs.name,two?'Player 2':'Bot'];applyRules(prefs.rules,prefs.loadouts,[prefs.color,'#3cac3c'],mapData);el('map-name').textContent=next.level.name;game.start(two,prefs.keyboardOnly);showGame();});}
 click('quick-bot',()=>startLocal());click('play-bot',()=>startLocal());click('play-local',()=>startLocal(true));
 input('keyboard-only').onchange=()=>{prefs.keyboardOnly=input('keyboard-only').checked;save();};
 input('room-name').onchange=()=>{prefs.roomName=input('room-name').value.trim()||'My room';save();};
 input('private-room').onchange=()=>{prefs.privateRoom=input('private-room').checked;save();};
-form('profile-form',()=>{prefs.name=input('player-name').value.trim();prefs.color=input('player-color').value;if(!prefs.name)throw new Error('Enter a player name.');save();notice('Profile saved for your next room or local game.');});
-form('settings-form',async()=>{prefs.rules={...prefs.rules,mode:Number(select('game-mode').value),lives:Number(input('rule-lives').value),loading:Number(input('rule-loading').value),bonuses:Number(input('rule-bonuses').value)};save();game?.setSound(prefs.sound);if(room.id){if(!room.host)throw new Error('Only the host can change room rules.');await saveRoomSettings();}notice('Settings saved. Round rules apply at the next start.');});
+form('profile-form',async()=>{
+ prefs.name=input('player-name').value.trim();prefs.color=input('player-color').value;if(!prefs.name)throw new Error('Enter a player name.');save();
+ if(room.id){await room.call('profile','PUT',{name:prefs.name,color:prefs.color});await room.refresh();}
+ else setAppearance(0,prefs.name,prefs.color);
+ notice('Profile saved and applied.');
+});
+function setAppearance(p:number,name:string,color:string){
+ playerNames[p]=name;module?._liero_color(p,parseInt(color.slice(1,3),16)>>2,parseInt(color.slice(3,5),16)>>2,parseInt(color.slice(5,7),16)>>2);
+ game?.refreshAppearance();
+}
+async function togglePlay(){
+ if(stopping)return;
+ if(playing&&(room.id?room.seat>=0:true)){
+  stopping=true;arena.playButton();closeMenus();
+  try{await game.stopPlayer();if(room.id){await room.call('seat','POST',{play:false});await room.refresh();arena.nextCamera(true);}else{game.stop();playing=false;el('hud').hidden=true;}}
+  finally{stopping=false;arena.playButton();}
+  return;
+ }
+ if(!room.id){if(!game){openMenu('rooms-menu');return;}await startLocal(localTwo);return;}
+ await room.call('seat','POST',{play:true});closeMenus();await room.refresh();arena.playButton();
+}
+form('settings-form',async()=>{prefs.rules={...prefs.rules,mode:Number(select('game-mode').value),lives:Number(input('rule-lives').value),loading:Number(input('rule-loading').value),bonuses:Number(input('rule-bonuses').value)};save();game?.setSound(prefs.sound);if(room.id){if(!room.host)throw new Error('Only the host can change room rules.');await saveRoomSettings();}if(!room.id&&playing)applyLiveRules(module,prefs.rules);notice('Settings saved and applied.');});
 click('fullscreen',async()=>{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();});
 window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!document.querySelector('dialog[open]')){e.preventDefault();openMenu('rooms-menu');}if(e.code==='Tab'&&document.activeElement===canvas){e.preventDefault();openMenu('leaderboard-menu');}});
 
@@ -82,12 +103,12 @@ click('leave-room',leaveRoom);
 const inviteURL=()=>location.origin+'/#room='+room.id+(room.room?.private?'&invite='+room.invite:'');
 async function copyInvite(){if(!room.id){notice('Join a room first.');return;}const url=inviteURL();input('invite-link').value=url;input('invite-link').hidden=false;try{await navigator.clipboard.writeText(url);notice('Invite link copied.');}catch{input('invite-link').select();openMenu('rooms-menu');el('room-browser').prepend(input('invite-link'));notice('Select and copy this invite link.');}}
 click('copy-invite',copyInvite);
-form('chat-form',async()=>{const message=input('chat-message').value.trim();if(!message)return;await room.call('chat','POST',{message});input('chat-message').value='';});
+form('chat-form',async()=>{const message=input('chat-message').value.trim();if(!message)return;input('chat-message').value='';await arena.sendChat(message);});
 click('take-seat',async()=>{await room.call('seat','POST',{play:room.seat<0});closeMenus();notice('Your player slot has been updated for the next round.');});
-async function saveRoomSettings(){if(room.host)await room.call('settings','PUT',{name:prefs.roomName,private:prefs.privateRoom,settings:{...prefs.rules,rotation:prefs.rotation}});}
+async function saveRoomSettings(){if(room.host){await room.call('settings','PUT',{name:prefs.roomName,private:prefs.privateRoom,settings:{...prefs.rules,rotation:prefs.rotation}});await room.refresh();}}
 function pingFor(id:string){if(id===room.room?.owner)return 0;return room.host?room.pings.get(id):peerPings[id];}
 function renderRoom(r:Room){
- if(!r)return;maps?.setRoom(room.host?undefined:r.settings.rotation);weapons?.setAvailability(weaponPool(r.settings.allowedWeapons));arena.room(r,pingFor);el('room-description').replaceChildren(countryFlag(r.country),document.createTextNode(' '+(r.private?'Private':'Public')+' · '+r.count+'/'+r.capacity));
+ if(!r)return;if(room.host&&round&&!round.ended&&rulesKey(r.settings)!==lastRulesKey){round.queueRules(r.settings);lastRulesKey=rulesKey(r.settings);}for(const m of r.members)if(m.seat>=0){setAppearance(m.seat,m.name,m.color);if(setup?.playerIds?.[m.seat]===m.id){setup.players[m.seat]=m.name;setup.colors[m.seat]=m.color;}}maps?.setRoom(room.host?undefined:r.settings.rotation);weapons?.setAvailability(weaponPool(r.settings.allowedWeapons));arena.room(r,pingFor);el('room-description').replaceChildren(countryFlag(r.country),document.createTextNode(' '+(r.private?'Private':'Public')+' · '+r.count+'/'+r.capacity));
  const members=el('members');members.replaceChildren();for(const m of r.members){const row=document.createElement('div');row.className='member';const dot=document.createElement('span');dot.className='worm-dot';dot.style.background=m.color;const name=document.createElement('span');name.className='member-name';name.textContent=m.name+(m.id===r.self?' (you)':'');const role=document.createElement('span');role.className='role';role.textContent=m.seat>=0?'Player '+(m.seat+1)+(m.id===r.owner?' / host':''):'Spectator'+(m.id===r.owner?' / host':'');const ping=document.createElement('span');ping.className='ping';const ms=pingFor(m.id);ping.textContent=ms===undefined?'—':ms+' ms';row.append(countryFlag(m.country),dot,name,role,ping);members.append(row);}
  const log=el('chat-history'),last=log.dataset.last||'';const next=String(r.chat.at(-1)?.seq||'');if(last!==next){const bottom=log.scrollHeight-log.scrollTop-log.clientHeight<35;log.replaceChildren();for(const msg of r.chat){const p=document.createElement('p'),name=document.createElement('strong');name.textContent=msg.name;p.append(name,document.createTextNode(msg.message));log.append(p);}log.dataset.last=next;if(bottom)log.scrollTop=log.scrollHeight;}
  el<HTMLButtonElement>('start-round').hidden=!room.host;const players=r.members.filter(m=>m.seat>=0),ready=players.length>0&&players.every(m=>m.id===r.self||peerLoadouts.has(m.id));el<HTMLButtonElement>('start-round').disabled=!ready||!!round&&!round.ended;
@@ -103,7 +124,7 @@ function renderRoom(r:Room){
  }
 }
 room.onState=renderRoom;room.onError=error=>{el('connection').textContent='Room unavailable';el('round-status').textContent=error.message;};
-room.onReady=id=>{if(!room.host)room.send(id,{type:'ready',version:1,loadout:prefs.loadouts[0]});};
+room.onReady=id=>{if(!room.host)room.send(id,{type:'ready',version:NETWORK_VERSION,loadout:prefs.loadouts[0]});};
 room.onLost=id=>{if(round&&!round.ended&&(id===room.room?.owner||(room.room?.members.find(m=>m.id===id)?.seat??-1)>=0)){round.ended=true;game.stop();playing=false;notice('Player connection lost. Return to the room to restart.');if(room.host)room.call('phase','PUT',{phase:'lobby'}).catch(report);}};
 function validLoadout(v:any){return Array.isArray(v)&&v.length===5&&v.every(n=>Number.isInteger(n)&&n>=1&&n<=40);}
 function sendSetup(id:string){
@@ -113,7 +134,7 @@ function sendSetup(id:string){
  room.send(id,{type:'start',round:setup.id});round?.history(id);
 }
 function launchNetwork(value:any,data:Uint8Array|null){
- applyRules(value.rules,value.loadouts,value.colors,data);setup=value;mapData=data;localTwo=false;follow=room.seat===1?1:0;playerNames=value.players;el('map-name').textContent=value.map.name;
+ applyRules(value.rules,value.loadouts,value.colors,data);lastRulesKey=rulesKey(value.rules);setup=value;mapData=data;localTwo=false;follow=room.seat===1?1:0;playerNames=value.players;el('map-name').textContent=value.map.name;
  if(round)round.ended=true;
  if(value.preview){round=undefined;playing=false;arena.reset();game.preview(value.seed);el('hud').hidden=true;el('spectator-tools').hidden=true;arena.nextCamera(true);return;}
  round=new NetworkRound(module,room,value.id,room.seat,value.participants??3);round.onError=message=>{game.stop();playing=false;notice(message);openMenu('rooms-menu');};round.onEnd=()=>{if(room.host){room.call('phase','PUT',{phase:'lobby'}).catch(report);roomTimeoutNext();}};
@@ -124,7 +145,7 @@ async function startOnline(mapId?:string,restart=false){await guard(async()=>{
  if(!room.host||!room.room)throw new Error('Only the host can start a round.');if(round&&!round.ended&&!restart)throw new Error('A round is already running.');
  const players=[0,1].map(p=>room.room!.members.find(m=>m.seat===p));if(!players.some(Boolean)||players.some(m=>m&&m.id!==room.room!.self&&!peerLoadouts.has(m.id)))throw new Error('Wait for the players to connect.');
  await saveRoomSettings();const chosen=mapId??nextMapId,next=chosen?await maps.pick(chosen):await maps.next();nextMapId=undefined;clearTimeout(roundTimeout);roundTimeout=0;const loadouts=players.map(m=>!m||m.id===room.room!.self?[...prefs.loadouts[0]]:[...peerLoadouts.get(m.id)!]);
- const value={version:1,id:crypto.randomUUID(),seed:crypto.getRandomValues(new Uint32Array(1))[0],rules:{...prefs.rules},loadouts:loadouts.map(list=>permittedLoadout(list,weaponPool(prefs.rules.allowedWeapons))),colors:players.map(m=>m?.color||'#3cac3c'),players:players.map(m=>m?.name||''),playerIds:players.map(m=>m?.id??null),participants:players.reduce((mask,m,p)=>mask|(m?1<<p:0),0),map:{id:next.level.id,name:next.level.name,bytes:next.data?.length||0}};
+ const value={version:NETWORK_VERSION,id:crypto.randomUUID(),seed:crypto.getRandomValues(new Uint32Array(1))[0],rules:{...prefs.rules},loadouts,colors:players.map(m=>m?.color||'#3cac3c'),players:players.map(m=>m?.name||''),playerIds:players.map(m=>m?.id??null),participants:players.reduce((mask,m,p)=>mask|(m?1<<p:0),0),map:{id:next.level.id,name:next.level.name,bytes:next.data?.length||0}};
  await room.call('phase','PUT',{phase:'playing'});launchNetwork(value,next.data);for(const m of room.room.members)if(m.id!==room.room.self)sendSetup(m.id);
 });}
 async function switchRoomMap(level:Level){
@@ -132,18 +153,21 @@ async function switchRoomMap(level:Level){
  const players=room.room.members.filter(m=>m.seat>=0);
  if(players.length>0&&players.every(m=>m.id===room.room!.self||peerLoadouts.has(m.id))){await startOnline(level.id,true);closeMenus();notice('Started '+level.name+' for everyone.');return;}
  await guard(async()=>{const data=await levelBytes(level);await saveRoomSettings();clearTimeout(roundTimeout);roundTimeout=0;await room.call('phase','PUT',{phase:'lobby'});nextMapId=level.id;
- const value={version:1,preview:true,id:crypto.randomUUID(),seed:crypto.getRandomValues(new Uint32Array(1))[0],rules:{...prefs.rules},loadouts:prefs.loadouts.map(a=>[...a]),colors:[prefs.color,'#3cac3c'],players:[prefs.name,'Player 2'],map:{name:level.name,bytes:data?.length||0}};
+ const value={version:NETWORK_VERSION,preview:true,id:crypto.randomUUID(),seed:crypto.getRandomValues(new Uint32Array(1))[0],rules:{...prefs.rules},loadouts:prefs.loadouts.map(a=>[...a]),colors:[prefs.color,'#3cac3c'],players:[prefs.name,'Player 2'],map:{name:level.name,bytes:data?.length||0}};
  launchNetwork(value,data);for(const member of room.room!.members)if(member.id!==room.room!.self)sendSetup(member.id);notice('Changed to '+level.name+'. Press Play to start.');});
 }
 click('start-round',async()=>{await startOnline();closeMenus();});
 room.onPacket=(from,packet)=>{
  try{
+  if(packet.type==='chat-delivery'&&!room.host&&from===room.room?.owner){arena.receiveChat(packet.message);return;}
+  if(packet.type==='chat-posted'&&room.host){const member=room.room?.members.find(m=>m.id===from),msg=packet.message;if(!member||!msg||msg.player!==from||typeof msg.message!=='string'||msg.message.length>500||!Number.isSafeInteger(msg.seq))return;const message={...msg,name:member.name};arena.receiveChat(message);room.broadcast({type:'chat-delivery',message});return;}
   if(packet.type==='loadout'&&room.host&&validLoadout(packet.loadout)&&room.room?.members.some(m=>m.id===from)){peerLoadouts.set(from,packet.loadout);return;}
-  if(packet.type==='ready'&&room.host){if(packet.version!==1||!validLoadout(packet.loadout))return;peerLoadouts.set(from,packet.loadout);if(setup&&(!round||!round.ended))sendSetup(from);return;}
+  if(packet.type==='ready'&&room.host){if(packet.version!==NETWORK_VERSION){room.send(from,{type:'update-required'});notice('A player needs to reload Liero before joining.');return;}if(!validLoadout(packet.loadout))return;peerLoadouts.set(from,packet.loadout);if(setup&&(!round||!round.ended))sendSetup(from);return;}
+  if(packet.type==='update-required'&&from===room.room?.owner){notice('Reload Liero to join this room: the game version has changed.');return;}
   if(packet.type==='pings'&&!room.host&&from===room.room?.owner){peerPings=packet.pings||{};return;}
   if(packet.type==='ended'&&from===room.room?.owner&&packet.round===round?.id){round!.ended=true;game.stop();endGame();return;}
   if(from===room.room?.owner&&!room.host){
-   if(packet.type==='start-meta'){const v=packet.setup;if(v?.version!==1||![1,2,3].includes(v.participants??3)||typeof v.id!=='string'||!Number.isInteger(v.seed)||!Array.isArray(v.loadouts)||!v.loadouts.every(validLoadout)||v.loadouts.length!==2||!Array.isArray(v.players)||v.players.length!==2||!Array.isArray(v.colors)||v.colors.length!==2||![0,1,2,3].includes(v.rules?.mode)||!Number.isInteger(v.map?.bytes)||v.map.bytes<0||v.map.bytes>1048576)throw new Error('Invalid round setup.');staging={value:v,chunks:[],size:0};return;}
+   if(packet.type==='start-meta'){const v=packet.setup;if(v?.version!==NETWORK_VERSION||![1,2,3].includes(v.participants??3)||typeof v.id!=='string'||!Number.isInteger(v.seed)||!Array.isArray(v.loadouts)||!v.loadouts.every(validLoadout)||v.loadouts.length!==2||!Array.isArray(v.players)||v.players.length!==2||!Array.isArray(v.colors)||v.colors.length!==2||![0,1,2,3].includes(v.rules?.mode)||!Number.isInteger(v.map?.bytes)||v.map.bytes<0||v.map.bytes>1048576)throw new Error('Invalid round setup.');staging={value:v,chunks:[],size:0};return;}
    if(packet.type==='map-chunk'&&staging?.value.id===packet.round){if(packet.offset!==staging.size||typeof packet.data!=='string'||packet.data.length>48000||staging.size+packet.data.length>1398104)throw new Error('Invalid map transfer.');staging.chunks.push(packet.data);staging.size+=packet.data.length;return;}
    if(packet.type==='start'&&staging?.value.id===packet.round){const bytes=staging.value.map.bytes?Uint8Array.from(atob(staging.chunks.join('')),c=>c.charCodeAt(0)):null;if((bytes?.length||0)!==staging.value.map.bytes)throw new Error('Incomplete map transfer.');launchNetwork(staging.value,bytes);staging=undefined;return;}
   }
@@ -169,7 +193,6 @@ async function renderArchive(extra?:Recording){
 onMenu('recordings-menu',()=>{el<HTMLButtonElement>('record-start').disabled=!playing||recorder.active||!recorder.supported();if(!recorder.supported())el('record-status').textContent='MP4 recording is not supported by this browser. Try a browser with MP4 MediaRecorder support.';return renderArchive();});
 click('record-start',()=>{if(!playing)throw new Error('Start or watch a game first.');recorder.start(canvas,module.audioStream,room.room?.name||'Local game');el('recording-indicator').hidden=false;el<HTMLButtonElement>('record-start').disabled=true;el<HTMLButtonElement>('record-stop').disabled=false;closeMenus();});
 click('record-stop',()=>recorder.stop());recorder.onError=error=>{el('recording-indicator').hidden=true;el<HTMLButtonElement>('record-start').disabled=!playing;el<HTMLButtonElement>('record-stop').disabled=true;report(error);};recorder.onSaved=(recording,persisted)=>{el('recording-indicator').hidden=true;el<HTMLButtonElement>('record-start').disabled=!playing;el<HTMLButtonElement>('record-stop').disabled=true;notice(persisted?'Recording saved to the local archive.':'Archive storage is full. Download this recording before closing the page.');renderArchive(recording).catch(report);};
-let installPrompt:any;window.addEventListener('beforeinstallprompt',(event:any)=>{event.preventDefault();installPrompt=event;el('install-app').hidden=false;});click('install-app',async()=>{await installPrompt?.prompt();installPrompt=undefined;el('install-app').hidden=true;});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(console.error);
 window.addEventListener('pagehide',()=>{recorder.stop();game?.dispose();});
 window.addEventListener('beforeunload',event=>{if(recorder.active){event.preventDefault();event.returnValue='';}});

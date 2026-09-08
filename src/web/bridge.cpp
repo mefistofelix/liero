@@ -38,6 +38,13 @@ static int playerColors[2][3]={{26,26,63},{15,43,15}};
 static bool rightDown[2], digPulse[2], practice;
 static int participants=3;
 static int weaponAvailability[40]={};
+static void selectAllowedWeapons(){
+    auto& g=session->game;
+    for(auto* worm:g.worms){auto& w=*worm;
+        if(g.settings->weapTable[w.weapons[w.currentWeapon].type-&g.common->weapons[0]]==0)continue;
+        for(int k=0;k<5;++k)if(g.settings->weapTable[w.weapons[k].type-&g.common->weapons[0]]==0){w.currentWeapon=k;break;}
+    }
+}
 
 // Reframe a COPY of the original camera. Render size never changes simulation
 // viewports, their per-tick RNG, or the original camera shake calculations.
@@ -68,6 +75,7 @@ static bool dirtInFront(Game& g, Worm& w) {
 }
 static void input(int p,int buttons,int angle,int wheel){
     auto& g=session->game; auto& w=*g.worms[p];
+    if((buttons&256)&&w.visible)g.doDamageDirect(w,std::max(1,w.health),p);
     for(int c=0;c<Worm::MaxControl;++c) w.setControlState((Worm::Control)c,false);
     w.externalAim=true; w.aimingAngle=itof(angle&127); w.aimingSpeed=0;
     w.direction=cossinTable[angle&127].x>=0?1:0;
@@ -79,11 +87,9 @@ static void input(int p,int buttons,int angle,int wheel){
     if(right&&!rightDown[p]){
         rightMode[p]=dirtInFront(g,w)?1:2;
         if(rightMode[p]==2&&!(buttons&4)){
-            if(w.ninjarope.out) w.ninjarope.out=w.ninjarope.attached=false;
-            else {
-                w.release(Worm::Left);w.release(Worm::Right);
-                w.press(Worm::Change);w.press(Worm::Jump);w.keyChangePressed=true;
-            }
+            w.ninjarope.out=w.ninjarope.attached=false;
+            w.release(Worm::Left);w.release(Worm::Right);
+            w.press(Worm::Change);w.press(Worm::Jump);w.keyChangePressed=true;
         }
     }
     if(right&&rightMode[p]==1){
@@ -116,6 +122,11 @@ EMSCRIPTEN_KEEPALIVE unsigned char* liero_font(){
 EMSCRIPTEN_KEEPALIVE void liero_color(int p,int red,int green,int blue){
     if(p<0||p>1)return;
     playerColors[p][0]=std::max(0,std::min(63,red));playerColors[p][1]=std::max(0,std::min(63,green));playerColors[p][2]=std::max(0,std::min(63,blue));
+    if(session){
+        auto& settings=*session->game.worms[p]->settings;
+        for(int c=0;c<3;++c)settings.rgb[c]=playerColors[p][c];
+        gfx.playRenderer.origpal.setWormColour(p,settings);
+    }
 }
 EMSCRIPTEN_KEEPALIVE void liero_player(int p){viewPlayer=p==1?1:0;freeX=freeY=-1;}
 EMSCRIPTEN_KEEPALIVE void liero_camera(int x,int y){freeX=std::max(0,std::min(504,x));freeY=std::max(0,std::min(350,y));}
@@ -136,6 +147,24 @@ EMSCRIPTEN_KEEPALIVE unsigned char* liero_palette(){
     static unsigned char pixels[256*4];Color palette[256];gfx.common->exepal.activate(palette);
     for(int i=0;i<256;++i){pixels[i*4]=palette[i].r;pixels[i*4+1]=palette[i].g;pixels[i*4+2]=palette[i].b;pixels[i*4+3]=255;}
     return pixels;
+}
+EMSCRIPTEN_KEEPALIVE void liero_rules_live(int mode,int lives,int loading,int bonuses){
+    if(!session)return;
+    auto& g=session->game;auto& settings=*g.settings;
+    const int oldLives=settings.lives;int previous[2][5];
+    for(int p=0;p<2;++p)for(int k=0;k<5;++k)previous[p][k]=g.worms[p]->weapons[k].type->computedLoadingTime(settings);
+    settings.gameMode=participants==3?std::max(0,std::min(3,mode)):Settings::GMKillEmAll;
+    settings.lives=std::max(1,std::min(99,lives));settings.loadingTime=std::max(1,std::min(1000,loading));settings.maxBonuses=std::max(0,std::min(20,bonuses));
+    int fallback=0;bool found=false;
+    for(int id=1;id<=40;++id){int type=g.common->weapOrder[id-1];settings.weapTable[type]=weaponAvailability[id-1];if(!found&&weaponAvailability[id-1]==0){fallback=type;found=true;}}
+    if(!found)settings.weapTable[fallback]=0;
+    for(int p=0;p<2;++p){auto& w=*g.worms[p];
+        if(participants&(1<<p))w.lives=std::max(1,w.lives+settings.lives-oldLives);
+        for(int k=0;k<5;++k){auto& weapon=w.weapons[k];
+            if(weapon.loadingLeft>0){int duration=weapon.type->computedLoadingTime(settings),old=std::max(1,previous[p][k]);weapon.loadingLeft=std::max(1,(weapon.loadingLeft*duration+old-1)/old);}
+        }
+    }
+    selectAllowedWeapons();
 }
 EMSCRIPTEN_KEEPALIVE unsigned char* liero_weapon_icon(int id){
     static unsigned char pixels[16*16*4];std::fill(pixels,pixels+sizeof(pixels),0);
@@ -184,7 +213,11 @@ EMSCRIPTEN_KEEPALIVE int liero_start(unsigned seed,int withBot){
     session->game.rand.seed(seed);
     Level level(*gfx.common);level.generateFromSettings(*gfx.common,*gfx.settings,gfx.rand);
     session->swapLevel(level);session->game.focus(gfx.playRenderer);
-    session->changeState(StateWeaponSelection);session->changeState(StateGame);
+    // Keep each personal loadout intact; availability controls selection/firing.
+    for(int id=0;id<40;++id)gfx.settings->weapTable[id]=0;
+    session->changeState(StateWeaponSelection);
+    for(int id=1;id<=40;++id)gfx.settings->weapTable[gfx.common->weapOrder[id-1]]=weaponAvailability[id-1];
+    session->changeState(StateGame);session->game.browserWeaponRules=true;session->game.browserOverlay=true;selectAllowedWeapons();
     session->fadeValue=33;practice=withBot!=0;return 1;
 }
 // Waiting alone uses the original simulation, with the unoccupied worm

@@ -15,7 +15,8 @@
   attached; S means down/extend rope and MUST NOT dig. Space explicitly jumps
   or releases the rope. Digging remains on contextual right click.
 - Right button is contextual: dig if diggable terrain is immediately in front of
-  the worm along the aim direction; otherwise throw the ninja rope. This is NOT
+  the worm along the aim direction; otherwise throw/rethrow the ninja rope immediately,
+  replacing any existing rope on every fresh right click. This is NOT
   a short-click/long-press distinction. Preserve the distinction between dirt and rock.
 - Automatic geographic matchmaking via Cloudflare D1, lobby and WebRTC gameplay.
   D1 stores matchmaking/signaling state, not per-frame game state.
@@ -83,6 +84,10 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - Two active players preserve the original engine; other room members spectate.
   Spectators can join mid-round, follow either player, or use free camera.
 - Persist name, worm color, loadouts, room preferences and map rotation locally.
+  Generate a random color once on first launch. Save profile updates name/color
+  immediately in the current room and renderer without resetting simulation.
+- Play toggles to Stop while playing. Stop submits a synchronized suicide input
+  and releases the seat; pressing Play again re-enters.
 - Weapon menu icons come from original game graphics. Map cards show terrain previews.
 - Import LEV/Powerlevel and common browser image formats by dropping files in Maps.
   Preserve LEV pixels/palettes. Show the conversion result for other images.
@@ -100,8 +105,13 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - Left toolbar: ONLY chat. ALL other controls go in the right toolbar: spectate/camera,
   play, copy invite, fullscreen, profile dropdown, current-room settings dropdown,
   room explorer/create, player count/list and audio. Dropdowns align to the right.
+  Copy room link and Fullscreen are the final two buttons at the far right.
 - Room explorer has three tabs: Explore (default), Create room and Local play. Creation settings
   belong only in the Create room panel, never below the server listing.
+- Help has its own right-toolbar icon and is not part of Profile. Installation
+  uses the browser UI; do not intercept the install prompt or add an Install button.
+- Default loadout: Gauss Gun, Larpa, Chiquita Bomb, Spikeballs, Shotgun, in that order.
+  Upgrade the former factory loadout while preserving customized choices.
 - Recordings has its own right-toolbar icon and works during live spectating.
   Audio is controlled only by the toolbar toggle. Neither belongs in Profile.
 - Popup close/Escape returns to the previous menu when opened from that menu
@@ -111,20 +121,29 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - Profile Weapons chooses a personal five-slot loadout. Room Allowed weapons is
   a separate host-owned availability pool, applied to both loadouts and bonus drops
   through original Settings::weapTable. Validate at least one permitted weapon.
+  Preserve all five personal weapon slots; skip forbidden slots without replacing
+  them. If none is permitted, firing is disabled until a weapon becomes available.
+  Default room weapon loading time is 30%.
 - Latest correction: room listings have ONE Players column showing total room
   members/capacity, e.g. 3/16, including spectators. Do not show the two-seat ratio.
-  Player overlays and
-  leaderboards show Kills and Deaths. Deaths count death callbacks, not lost lives.
+  Player overlays use a table with Player, Kills, Deaths and Ping headers; rows
+  contain values without repeating labels. Spectating appears under the player name.
+  Leaderboards show Kills and Deaths. Deaths count death callbacks, not lost lives.
 - Player list starts open, includes spectators, measured host RTT, kills/deaths for players.
   Hiding it preserves the member count beside the toolbar icon.
-- Chat opens on T or its top-left icon. The last eight messages stay visible at the
+- Chat opens on Enter or its top-left icon; Enter sends the composed message. The last eight messages stay visible at the
   bottom left without age-based expiry; older messages fade out briefly when newer
   ones push them beyond the eight-message limit. Input sits below the messages.
+  Show outgoing messages immediately; relay persisted messages over WebRTC without
+  waiting for D1 polling. Deduplicate echoes. Beep for new messages, including own
+  messages, respecting the audio toggle; do not beep for historical messages.
 - Kill feed sits below the player list: killer, actual weapon, victim; entries fade.
+  Include suicides with no killer name. Keep these entries through round transitions.
   Observe original StatsRecorder callbacks. Do not infer weapons from current loadouts.
 - Worm labels display the player name, with two thin bars below it for health and
   current-weapon reload progress, including while spectating. Use original engine
-  health limits and reload timers. Your weapon name briefly replaces your name on change.
+  health limits and reload timers. Keep the player name on weapon changes. Hide the
+  original kill/suicide banners and weapon-switch text; use the browser overlays.
 - Startup: display Temple and open Room explorer on the Explore tab. Joining or
   creating a room and explicit Play actions close the popup. Invite links join directly.
   Find nearest room chooses the lowest measured RTT worldwide and creates a public
@@ -149,6 +168,9 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   Any remaining player continues in a new solo round. Spectator clicks cycle players, then free camera.
   Drag right mouse to pan free camera; configured WASD also works during live spectating.
 - Host owns room rules/rotation. Guests inspect room rules and edit their own profile/loadout.
+  Rule changes apply on a synchronized simulation tick and are retained in spectator
+  history. In-progress reloads preserve their completion fraction at the new speed.
+  Keep initial round rules in the join setup; replay timed changes from history.
 - WebRTC reliable ordered lockstep at 70 Hz, six ticks of input buffering. D1 handles
   directory, membership, chat and SDP/ICE only. It never carries per-frame simulation.
 - Spectator host coordinates inputs from both remote seats. Late viewers receive

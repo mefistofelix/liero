@@ -52,6 +52,8 @@ struct Holdazone
 
 struct Game
 {
+    bool browserWeaponRules = false;
+    bool browserOverlay = false;
 	Game(gvl::shared_ptr<Common> common, gvl::shared_ptr<Settings> settings, gvl::shared_ptr<SoundPlayer> soundPlayer);
 	~Game();
 

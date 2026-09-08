@@ -12,6 +12,7 @@ export type EngineModule = {
   HEAPU8: Uint8Array; HEAP32: Int32Array;
   _liero_start(seed: number, bot: number): number;
   _liero_participants(mask:number):void;
+  _liero_rules_live(mode:number,lives:number,loading:number,bonuses:number):void;
   _liero_view(split:number,width:number,height:number): void;
   _liero_step_local(b:number,a:number,w:number,raw0:number,raw1:number): number;
   _liero_loadout(player:number,slot:number,id:number): void;
@@ -118,6 +119,11 @@ export class LocalGame {
     this.canvas.focus(); this.raf=requestAnimationFrame(this.frame);
   }
   setSound(enabled:boolean){this.sound=enabled;this.module._liero_mute(enabled&&!this.paused?0:1);}
+  refreshAppearance(){if(this.active)this.render();}
+  async stopPlayer(){
+    if(this.network)await this.network.requestStop();
+    else{this.module._liero_step(256,96,0,0,96,0);this.render();}
+  }
   setControls(controls:Controls){this.controls=structuredClone(controls);this.clear();}
   pause(paused:boolean){this.paused=paused&&!this.network;this.clear();this.module._liero_mute(this.sound&&!this.paused?0:1);}
   setCamera(player:number|'free'){this.freeCamera=player==='free';if(player!=='free')this.module._liero_player(player);else{const ptr=this.module._liero_info()>>2;this.camera={x:this.module.HEAP32[ptr+40]+this.canvas.width/2,y:this.module.HEAP32[ptr+41]+this.canvas.height/2};this.module._liero_camera(this.camera.x,this.camera.y);}if(this.previewing)this.render();}

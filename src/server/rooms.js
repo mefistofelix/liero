@@ -75,8 +75,12 @@ export async function roomAPI(request,env,key){
    }
   }
   if(!member)fail('Join the room first.',403);
+  if(action==='profile'&&request.method==='PUT'){
+   const b=await body(request),name=short(b.name,20);if(!/^#[a-f0-9]{6}$/i.test(b.color))fail('Invalid worm color.');
+   await query(db,'UPDATE members SET name=?,color=? WHERE room=? AND player=?',name,b.color,id,key);return json({ok:true});
+  }
   if(action==='state'&&request.method==='GET'){
-   const r=await db.batch([statement(db,'UPDATE members SET expires_at=? WHERE room=? AND player=?',now+TTL,id,key),statement(db,'UPDATE rooms SET expires_at=? WHERE id=? AND owner=?',now+TTL,id,key),statement(db,'SELECT player id,name,color,seat,country FROM members WHERE room=? ORDER BY seat,name',id),statement(db,'SELECT seq,name,message,created_at FROM room_chat WHERE room=? ORDER BY seq DESC LIMIT 100',id)]);
+   const r=await db.batch([statement(db,'UPDATE members SET expires_at=? WHERE room=? AND player=?',now+TTL,id,key),statement(db,'UPDATE rooms SET expires_at=? WHERE id=? AND owner=?',now+TTL,id,key),statement(db,'SELECT player id,name,color,seat,country FROM members WHERE room=? ORDER BY seat,name',id),statement(db,'SELECT seq,player,name,message,created_at FROM room_chat WHERE room=? ORDER BY seq DESC LIMIT 100',id)]);
    return json({...publicRoom(room,r[2].results.length),owner:room.owner,self:key,members:r[2].results,chat:r[3].results.reverse()});
   }
   if(action==='seat'&&request.method==='POST'){
@@ -87,7 +91,7 @@ export async function roomAPI(request,env,key){
   if(action==='chat'&&request.method==='POST'){
    const b=await body(request),message=short(b.message,500);
    const recent=(await query(db,'SELECT COUNT(*) n FROM room_chat WHERE room=? AND player=? AND created_at>?',id,key,now-10))[0].n;if(recent>=8)fail('Wait a moment before sending more messages.',429);
-   await db.batch([statement(db,'INSERT INTO room_chat(room,player,name,message,created_at) VALUES(?,?,?,?,?)',id,key,member.name,message,now),statement(db,'DELETE FROM room_chat WHERE room=? AND seq NOT IN(SELECT seq FROM room_chat WHERE room=? ORDER BY seq DESC LIMIT 100)',id,id)]);return json({ok:true});
+   const saved=await db.batch([statement(db,'INSERT INTO room_chat(room,player,name,message,created_at) VALUES(?,?,?,?,?)',id,key,member.name,message,now),statement(db,'DELETE FROM room_chat WHERE room=? AND seq NOT IN(SELECT seq FROM room_chat WHERE room=? ORDER BY seq DESC LIMIT 100)',id,id),statement(db,'SELECT seq,player,name,message,created_at FROM room_chat WHERE room=? AND player=? ORDER BY seq DESC LIMIT 1',id,key)]);return json({ok:true,message:saved[2].results[0]});
   }
   if(action==='settings'&&request.method==='PUT'){
    if(!owner)fail('Only the host can edit the room.',403);const b=await body(request);

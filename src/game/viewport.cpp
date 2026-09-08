@@ -92,6 +92,7 @@ void Viewport::draw(Game& game, Renderer& renderer, GameState state, bool isRepl
 	Worm& worm = *game.wormByIdx(wormIdx);
 	int multiplier = renderer.renderResX / 320;
 	int centerX = renderer.renderResX / 2;
+	if(!game.browserOverlay){
 
 	if(worm.visible)
 	{
@@ -197,8 +198,8 @@ void Viewport::draw(Game& game, Renderer& renderer, GameState state, bool isRepl
 	break;
 	}
 
+	}
 	gvl::ivec2 renderPos(x, y);
-
 	{
 		PreserveClipRect pcr(renderer.bmp);
 
@@ -255,7 +256,7 @@ void Viewport::draw(Game& game, Renderer& renderer, GameState state, bool isRepl
 			}
 		}
 
-		if(bannerY > -8
+		if(!game.browserOverlay && bannerY > -8
 		&& worm.health <= 0)
 		{
 			if(game.settings->gameMode == Settings::GMGameOfTag
@@ -270,7 +271,7 @@ void Viewport::draw(Game& game, Renderer& renderer, GameState state, bool isRepl
 		{
 			Viewport* v = game.viewports[i];
 			Worm& otherWorm = *game.wormByIdx(v->wormIdx);
-			if(v != this
+			if(!game.browserOverlay && v != this
 			&& otherWorm.health <= 0
 			&& v->bannerY > -8)
 			{
@@ -590,7 +591,7 @@ void Viewport::draw(Game& game, Renderer& renderer, GameState state, bool isRepl
 				temp.x,
 				temp.y);
 
-			if(worm.pressed(Worm::Change))
+			if(!game.browserOverlay && worm.pressed(Worm::Change))
 			{
 				std::string const& name = worm.weapons[worm.currentWeapon].type->name;
 

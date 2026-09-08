@@ -1,7 +1,7 @@
 import type {Preferences} from './preferences.ts';
 import {localCountry} from './flags.ts';
 export type Member={id:string;name:string;color:string;seat:number;country?:string};
-export type Room={id:string;name:string;region:string;country:string;private:boolean;phase:string;count:number;capacity:number;players?:number;settings:any;self:string;owner:string;members:Member[];chat:{seq:number;name:string;message:string;created_at:number}[]};
+export type Room={id:string;name:string;region:string;country:string;private:boolean;phase:string;count:number;capacity:number;players?:number;settings:any;self:string;owner:string;members:Member[];chat:{seq:number;player:string;name:string;message:string;created_at:number}[]};
 const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
 export async function api(path:string,method='GET',body?:unknown,invite='',identity=token){
  const response=await fetch(`/api${path}`,{method,headers:{Authorization:`Bearer ${identity}`,...(body?{'Content-Type':'application/json'}:{}),...(invite?{'X-Room-Invite':invite}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(12000)});
@@ -38,6 +38,7 @@ export class RoomClient{
  async join(id:string,invite:string,p:Preferences){await api(`/rooms/${id}/join`,'POST',{name:p.name,color:p.color,country:await localCountry()},invite);await this.enter(id,invite);}
  private async enter(id:string,invite:string){this.id=id;this.invite=invite;this.cursor=0;this.stopped=false;await this.poll();}
  async call(action:string,method='GET',body?:unknown){return api(`/rooms/${this.id}${action?`/${action}`:''}`,method,body,this.invite);}
+ async refresh(){if(!this.id)return;const state:Room=await this.call('state');if(state.id!==this.id)return;this.room=state;this.onState(state);}
  private wire(id:string){
   const wire=new Wire(data=>this.call('signals','POST',{to:id,data}),packet=>{
    if(packet.type==='ping'){wire.send({type:'pong',at:packet.at});return;}

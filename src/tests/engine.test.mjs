@@ -7,6 +7,23 @@ import create from '../browser/engine/openliero.mjs';
 const engineDir=new URL('../browser/engine/',import.meta.url);
 const fresh=()=>create({locateFile:file=>fileURLToPath(new URL(file,engineDir))});
 const state=m=>Array.from(m.HEAP32.subarray(m._liero_info()>>2,(m._liero_info()>>2)+12));
+test('live rules rescale an ongoing reload without restarting or replacing disabled weapons',async()=>{
+ const m=await fresh();m._liero_options(0,99,100,0,0);for(let p=0;p<2;p++)for(let k=0;k<5;k++)m._liero_loadout(p,k,1);m._liero_start(1,0);
+ let offset=0;for(let f=0;f<2000;f++){m._liero_step(8,0,0,0,64,0);offset=m._liero_info()>>2;if(m.HEAP32[offset+47]>20)break;}
+ const before=m.HEAP32.slice(offset,offset+52);expect(before[47]).toBeGreaterThan(20);
+ m._liero_rules_live(0,20,40,2);m._liero_info();const after=m.HEAP32.slice(offset,offset+52);
+ expect(after[0]).toBe(before[0]);expect(after[24]).toBe(before[24]);expect(after[25]).toBe(before[25]);
+ expect(after[47]).toBe(Math.ceil(before[47]*after[48]/before[48]));expect(after[47]).toBeLessThan(before[47]);
+ for(let id=1;id<=40;id++)m._liero_allowed(id,id===35?1:0);m._liero_rules_live(0,20,40,2);m._liero_info();expect(m._liero_weapon_id(m.HEAP32[offset+14])).toBe(1);const ammo=m.HEAP32[offset+12];for(let f=0;f<5;f++)m._liero_step(8,0,0,0,64,0);m._liero_info();expect(m.HEAP32[offset+12]).toBe(ammo);
+});
+test('live color changes preserve simulation and stop records an original suicide',async()=>{
+ const m=await fresh();m._liero_start(178,0);for(let f=0;f<300;f++)m._liero_step(0,64,0,0,64,0);
+ const before=m._liero_hash(),pixels=m.HEAPU8.slice(m._liero_render(),m._liero_render()+320*200*4);
+ m._liero_color(0,63,0,0);expect(m._liero_hash()).toBe(before);
+ const ptr=m._liero_render();expect(m.HEAPU8.slice(ptr,ptr+pixels.length)).not.toEqual(pixels);
+ m._liero_step(256,64,0,0,64,0);const p=m._liero_info()>>2;
+ expect(m.HEAP32[p+44]).toBe(1);expect(m.HEAP32[p+33]).toBe(0);expect(m.HEAP32[p+26]).toBe(0);
+});
 
 test('full-page, split and free-camera rendering do not change the simulation',async()=>{
  const a=await fresh(),b=await fresh();a._liero_start(456,0);b._liero_start(456,0);
@@ -41,13 +58,19 @@ test('worm bars expose each player health limit and original reload timer indepe
 test('mouse fire works with rope and wheel modifiers, and explicit release wins during scrolling',async()=>{
  const ready=async()=>{const m=await fresh();for(let slot=0;slot<5;slot++)m._liero_loadout(0,slot,1);m._liero_start(321,0);for(let f=0;f<300;f++)m._liero_step(0,64,0,0,64,0);return m;};
  const rope=await ready(),ptr=rope._liero_info()>>2,ammo=rope.HEAP32[ptr+12];rope._liero_step(8|16,64,0,0,64,0);rope._liero_info();expect(rope.HEAP32[ptr+12]).toBe(ammo-1);expect(rope.HEAP32[ptr+5]).toBe(1);
+ rope._liero_step(0,64,0,0,64,0);rope._liero_step(16,64,0,0,64,0);rope._liero_info();expect(rope.HEAP32[ptr+5]).toBe(1);
  rope._liero_step(4|16,64,1,0,64,0);rope._liero_info();expect(rope.HEAP32[ptr+5]).toBe(0);
  const wheel=await ready(),offset=wheel._liero_info()>>2,before=wheel.HEAP32[offset+12],slot=wheel.HEAP32[offset+4];wheel._liero_step(8,64,1,0,64,0);wheel._liero_info();expect(wheel.HEAP32[offset+4]).toBe((slot+1)%5);wheel._liero_step(0,64,-1,0,64,0);wheel._liero_info();expect(wheel.HEAP32[offset+12]).toBe(before-1);
 });
 
-test('original weapon availability restricts all five slots to the room pool',async()=>{
- const m=await fresh();for(let id=1;id<=40;id++)m._liero_allowed(id,id===1?1:0);m._liero_start(33,0);
- for(let n=0;n<5;n++){m._liero_step(0,96,1,0,32,0);m._liero_step(0,96,0,0,32,0);const p=m._liero_info()>>2;expect(m._liero_weapon_id(m.HEAP32[p+14])).toBe(1);}
+test('room restrictions skip unavailable slots while retaining the complete personal loadout',async()=>{
+ const m=await fresh(),loadout=[19,25,9,36,35];for(let p=0;p<2;p++)for(let k=0;k<5;k++)m._liero_loadout(p,k,loadout[k]);
+ for(let id=1;id<=40;id++)m._liero_allowed(id,id===25||id===35?1:0);m._liero_start(33,0);
+ for(let f=0;f<300;f++)m._liero_step(0,96,0,0,32,0);
+ const selected=()=>{const p=m._liero_info()>>2;return [m.HEAP32[p+4],m._liero_weapon_id(m.HEAP32[p+14])];};
+ expect(selected()).toEqual([1,25]);for(let n=0;n<4;n++){m._liero_step(0,96,1,0,32,0);m._liero_step(0,96,0,0,32,0);expect(selected()).toEqual(n%2?[1,25]:[4,35]);}
+ for(let id=1;id<=40;id++)m._liero_allowed(id,1);m._liero_rules_live(0,15,100,4);
+ const seen=new Set();for(let n=0;n<5;n++){m._liero_step(0,96,1,0,32,0);m._liero_step(0,96,0,0,32,0);seen.add(selected()[1]);}expect([...seen].sort()).toEqual([...loadout].sort());
 });
 
 test('original engine loads upstream assets, spawns and renders opaque pixels',async()=>{
