@@ -6,7 +6,7 @@ const neutral:Input=[0,96,0],DELAY=6;
 export class NetworkRound{
  frame=0;ended=false;log:Frame[]=[];private local=new Map<number,Input>();private remote=new Map<number,Input>();private commits=new Map<number,Frame>();private sent=-1;
  onEnd=()=>{};onError=(message:string)=>{};
- constructor(private engine:EngineModule,private room:RoomClient,readonly id:string,readonly seat:number){for(let f=0;f<DELAY;f++){this.local.set(f,[...neutral]);this.remote.set(f,[...neutral]);}this.sent=DELAY-1;}
+ constructor(private engine:EngineModule,private room:RoomClient,readonly id:string,readonly seat:number,readonly participants=3){for(let f=0;f<DELAY;f++){this.local.set(f,[...neutral]);this.remote.set(f,[...neutral]);}this.sent=DELAY-1;}
  get spectator(){return this.seat<0;}
  get needsInput(){return !this.spectator&&this.frame+DELAY>this.sent;}
  receive(from:string,packet:Record<string,any>){
@@ -33,7 +33,7 @@ export class NetworkRound{
   }
   let data:Frame;
   if(this.room.host){
-   const a=this.local.get(this.frame),b=this.remote.get(this.frame);if(!a||!b)return false;
+   const a=this.participants&1?this.local.get(this.frame):neutral,b=this.participants&2?this.remote.get(this.frame):neutral;if(!a||!b)return false;
    data=[...a,...b,0];
   }else{const commit=this.commits.get(this.frame);if(!commit)return false;data=commit;}
   const alive=this.engine._liero_step(...data.slice(0,6) as [number,number,number,number,number,number]);

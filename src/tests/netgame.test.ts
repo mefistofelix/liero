@@ -2,6 +2,22 @@ import {test,expect} from 'bun:test';
 import create from '../browser/engine/openliero.mjs';
 import {NetworkRound} from '../browser/netgame.ts';
 const fresh=()=>create({locateFile:file=>Bun.file(new URL('../browser/engine/'+file,import.meta.url)).name});
+test('one occupied seat keeps simulating with a spectator host and late viewers',async()=>{
+ for(const seat of [0,1]){
+  const engines=await Promise.all([fresh(),fresh(),fresh()]);
+  for(const engine of engines){engine._liero_options(2,1,100,0,0);engine._liero_start(789,0);engine._liero_participants(1<<seat);}
+  const packets:any[]=[];let viewer:NetworkRound;
+  const room:any={host:true,room:{owner:'host',self:'host',members:[{id:'host',seat:-1},{id:'player',seat}]},broadcast:p=>packets.push(p),send:(_to,p)=>viewer.receive('host',p)};
+  const host=new NetworkRound(engines[0],room,'solo',-1,1<<seat);
+  const player=new NetworkRound(engines[1],{host:false,room:{owner:'host'},send:(_to,p)=>host.receive('player',p)} as any,'solo',seat,1<<seat);
+  viewer=new NetworkRound(engines[2],{host:false,room:{owner:'host'}} as any,'solo',-1,1<<seat);
+  const errors:string[]=[];for(const round of [host,player,viewer])round.onError=e=>errors.push(e);
+  for(let f=0;f<900;f++){player.advance([8|(f%80<40?1:2),f&127,0]);host.advance([0,0,0]);for(const packet of packets.splice(0))player.receive('host',packet);}
+  host.history('viewer');while(viewer.frame<host.frame)expect(viewer.advance([0,0,0])).toBe(true);
+  expect(host.frame).toBeGreaterThan(890);expect(errors).toEqual([]);expect(engines[2]._liero_hash()).toBe(engines[0]._liero_hash());
+  const offset=engines[0]._liero_info()>>2;expect(engines[0].HEAP32[offset+26+(1-seat)*4]).toBe(0);
+ }
+});
 test('delayed peer inputs and late spectator history reproduce the host simulation',async()=>{
  const a=await fresh(),b=await fresh(),c=await fresh();for(const engine of [a,b,c])engine._liero_start(789,0);
  let clock=0;const messages:any[]=[];

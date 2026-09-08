@@ -36,6 +36,7 @@ static int freeX=-1,freeY=-1;
 static std::string levelPath;
 static int playerColors[2][3]={{26,26,63},{15,43,15}};
 static bool rightDown[2], digPulse[2], practice;
+static int participants=3;
 static int weaponAvailability[40]={};
 
 // Reframe a COPY of the original camera. Render size never changes simulation
@@ -162,6 +163,7 @@ EMSCRIPTEN_KEEPALIVE void liero_loadout(int player,int slot,int id){
     if(player>=0&&player<2&&slot>=0&&slot<5&&id>=1&&id<=40)loadout[player][slot]=id;
 }
 EMSCRIPTEN_KEEPALIVE int liero_start(unsigned seed,int withBot){
+    participants=3;
     session.reset(); gfx.rand.seed(seed); gfx.settings.reset(new Settings);
     // Original replay packet format doesn't carry absolute aim.
     gfx.settings->recordReplays=false; gfx.settings->selectBotWeapons=0;
@@ -185,7 +187,26 @@ EMSCRIPTEN_KEEPALIVE int liero_start(unsigned seed,int withBot){
     session->changeState(StateWeaponSelection);session->changeState(StateGame);
     session->fadeValue=33;practice=withBot!=0;return 1;
 }
+// Waiting alone uses the original simulation, with the unoccupied worm
+// eliminated and match completion deferred until a second player joins.
+EMSCRIPTEN_KEEPALIVE void liero_participants(int mask){
+    if(!session)return;
+    participants=mask&3;
+    if(participants==1||participants==2){
+        session->game.settings->gameMode=Settings::GMKillEmAll;
+        for(int p=0;p<2;++p)if(!(participants&(1<<p))){
+            auto& w=*session->game.worms[p];w.visible=false;w.lives=0;
+            w.ninjarope.out=w.ninjarope.attached=false;
+        }
+    }
+}
 EMSCRIPTEN_KEEPALIVE int liero_step(int b0,int a0,int w0,int b1,int a1,int w1){
+    if(session&&(participants==1||participants==2)){
+        const int p=participants==1?0:1;
+        auto& w=*session->game.worms[p];w.lives=std::max(1,w.lives);
+        input(p,p==0?b0:b1,p==0?a0:a1,p==0?w0:w1);
+        session->game.processFrame();return 1;
+    }
     if(!session||session->game.isGameOver())return 0;
     input(0,b0,a0,w0);if(!practice)input(1,b1,a1,w1);
     session->process();return 1;
@@ -241,7 +262,7 @@ EMSCRIPTEN_KEEPALIVE int liero_aim(int p,int x,int y){
 }
 EMSCRIPTEN_KEEPALIVE int* liero_info(){
     if(!session)return info;
-    info[0]=session->game.cycles;info[1]=session->game.isGameOver();
+    info[0]=session->game.cycles;info[1]=participants==3&&session->game.isGameOver();
     for(int p=0;p<2;++p){auto& w=*session->game.worms[p];
         info[2+p*5]=w.health;info[3+p*5]=w.lives;info[4+p*5]=w.currentWeapon;
         info[5+p*5]=w.ninjarope.out;info[6+p*5]=rightMode[p];}

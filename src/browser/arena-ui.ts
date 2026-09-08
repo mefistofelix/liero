@@ -31,8 +31,8 @@ export class ArenaUI{
   const list=el('overlay-players');list.replaceChildren();const members=[...r.members].sort((a,b)=>(a.seat<0?3:a.seat)-(b.seat<0?3:b.seat));
   for(const m of members){const row=document.createElement('div');row.className='member';const dot=document.createElement('span');dot.className='worm-dot';dot.style.background=m.color;const name=document.createElement('span');name.className='member-name';name.textContent=m.name+(m.id===r.self?' (you)':'');const role=document.createElement('span');role.className='role';role.textContent=m.seat<0?'Spectating':'P'+(m.seat+1);if(m.id===r.owner)role.title='Room host';const data=document.createElement('span');data.className='player-stats';if(m.seat>=0&&this.c.playing())data.textContent=`${this.state[16+m.seat]} Kills · ${this.state[44+m.seat]||0} Deaths`;const ms=ping(m.id),latency=document.createElement('span');latency.className='ping';latency.textContent=ms===undefined?'—':ms+' ms';row.append(countryFlag(m.country),dot,name,role,data,latency);list.append(row);}
   el('player-count').textContent=String(r.members.length);el('players-toggle').title=`${r.members.filter(m=>m.seat>=0).length} playing · ${r.members.filter(m=>m.seat<0).length} spectating`;
-  el<HTMLButtonElement>('join-play').disabled=this.c.seat()>=0||r.phase==='playing'||r.members.filter(m=>m.seat>=0).length>=2;
-  el('join-play').title=r.phase==='playing'?'Join when the round ends':'Join game';el('spectate-label').textContent=this.c.seat()>=0?'Spectate':this.camera==='free'?'Free camera':this.c.names()[this.camera]||'Spectate';
+  el<HTMLButtonElement>('join-play').disabled=this.c.seat()>=0||r.members.filter(m=>m.seat>=0).length>=2;
+  el('join-play').title='Join game';el('spectate-label').textContent=this.c.seat()>=0?'Spectate':this.camera==='free'?'Free camera':this.c.names()[this.camera]||'Spectate';
  }
  frame(state:Int32Array){
   this.state=state.slice();if(state[0]<this.cycle)this.reset();this.cycle=state[0];const c=this.c,seat=c.seat(),now=performance.now();

@@ -80,7 +80,7 @@ export async function roomAPI(request,env,key){
    return json({...publicRoom(room,r[2].results.length),owner:room.owner,self:key,members:r[2].results,chat:r[3].results.reverse()});
   }
   if(action==='seat'&&request.method==='POST'){
-   const b=await body(request);if(b.play&&room.phase!=='lobby')fail('Wait for the round to end.',409);
+   const b=await body(request);
    const r=await db.batch([statement(db,`UPDATE members SET seat=CASE WHEN ?=0 THEN -1 WHEN seat>=0 THEN seat ELSE COALESCE((SELECT slot FROM (SELECT 0 slot UNION ALL SELECT 1) WHERE NOT EXISTS(SELECT 1 FROM members m WHERE m.room=? AND m.seat=slot) ORDER BY slot LIMIT 1),-1) END WHERE room=? AND player=?`,b.play?1:0,id,id,key),statement(db,'SELECT seat FROM members WHERE room=? AND player=?',id,key)]);
    const seat=r[1].results[0].seat;if(b.play&&seat<0)fail('Both player slots are occupied.',409);return json({seat});
   }

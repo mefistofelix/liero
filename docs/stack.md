@@ -50,6 +50,11 @@ chat, heartbeat e signaling SDP/ICE. All’avvio il client misura RTT delle stan
 in tutto il mondo e sceglie il ping minimo. In assenza di host raggiungibili crea una
 stanza pubblica. Tutti entrano da spettatori; due posti di gioco sono distinti
 dalla proprietà della stanza. Il pulsante Play prenota un posto disponibile.
+Un solo player pronto avvia subito il gioco: il posto vuoto è eliminato tramite
+l'adapter e la fine partita viene sospesa. La simulazione originale continua con
+respawn; quando arriva il secondo player riparte un round sincronizzato sulla
+stessa mappa con le regole della stanza. Il lockstep invia input neutro per il
+posto vuoto e funziona anche con host spettatore.
 La vecchia API /api/queue resta disponibile come prototipo separato; l'interfaccia
 usa /api/rooms. Il primo deployment e le API D1 sono stati verificati online.
 

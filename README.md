@@ -13,7 +13,9 @@ The hosted game is public.
 The game joins the reachable public room with the lowest measured ping.
 If no room is reachable, it creates one. Everyone enters as a spectator; select
 **Join game** to play. Rooms support up to 16 people, including spectators, with
-two active players to preserve the original engine.
+up to two active players to preserve the original engine. You can start alone and
+play while waiting, with no inactive opponent or match completion. When a second
+player joins, a synchronized round starts on the same map using the room rules.
 
 - **Rooms:** sort by people, ping or name; filter empty/full rooms; create public/private rooms, copy invite links and chat.
 - **Spectating:** follow either player or drag with the right mouse button in free camera.

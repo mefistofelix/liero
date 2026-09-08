@@ -132,15 +132,18 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - Room and player flags use bundled SVG files. Obtain country from request.cf or
   cf-ipcountry; Sites fallback is the browser’s same-origin /cdn-cgi/trace loc field.
   Preserve unknown geography as unknown; do not guess a country.
-- Maps has a right-toolbar button and an independently scrolling body beneath a fixed
-  header/close control. Hosts can Play now to restart everyone on a selected map;
-  while waiting for players, broadcast the selected preview and use it for the next round.
+- Maps has a right-toolbar button. Header/close, import, search, filters and top
+  pagination remain fixed; only map cards and rotation scroll. Hosts can Play now
+  to restart everyone on a selected map, including while playing alone.
 - The hosted game is PUBLIC at https://liero.haxthepax.chatgpt.site/ and is named Liero.
 - Every room entry, INCLUDING creation, starts as spectator. Host is an independent
   ownership role; either/both player seats may belong to guests. A Play action claims
-  an available seat. Two ready players trigger a round automatically.
-- Spectate while playing requires a GUI confirmation, releases the slot and ends the
-  current two-player round. Spectator clicks cycle players, then free camera.
+  an available seat. One ready player starts immediately and can play while waiting.
+  Solo waiting defers match completion and hides the unoccupied worm through the
+  browser adapter. The second player can join immediately; seat changes restart a
+  synchronized round on the same map with original multiplayer rules.
+- Spectate while playing requires a GUI confirmation and releases the slot.
+  Any remaining player continues in a new solo round. Spectator clicks cycle players, then free camera.
   Drag right mouse to pan free camera; configured WASD also works during live spectating.
 - Host owns room rules/rotation. Guests inspect room rules and edit their own profile/loadout.
 - WebRTC reliable ordered lockstep at 70 Hz, six ticks of input buffering. D1 handles

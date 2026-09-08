@@ -8,7 +8,9 @@ const tables=new Map<string,Uint8Array>(),glyphs=new Bytes(),loca=new Bytes(),me
 const codes=[0,...Array.from({length:95},(_,i)=>i+32)];let maxPoints=0,maxContours=0;
 for(const code of codes){
  loca.u32(glyphs.a.length);const cells:{x:number;y:number}[]=[];const width=bitmap[code*57]||4;
- for(let y=0;y<8;y++)for(let x=0;x<7;x++)if(x<width&&bitmap[code*57+1+y*7+x])cells.push({x:x*128,y:(5-y)*128});
+ // Bitmap rows 0..4 are capitals, row 5 contains descenders. Place the
+ // capital baseline at zero so the visible text is centered in the em box.
+ for(let y=0;y<8;y++)for(let x=0;x<7;x++)if(x<width&&bitmap[code*57+1+y*7+x])cells.push({x:x*128,y:(4-y)*128});
  const g=new Bytes().u16(cells.length).u16(0).u16(cells.length?Math.min(...cells.map(p=>p.y)):0).u16(cells.length?Math.max(...cells.map(p=>p.x+128)):0).u16(cells.length?Math.max(...cells.map(p=>p.y+128)):0);cells.forEach((_,i)=>g.u16(i*4+3));g.u16(0);
  const points=cells.flatMap(({x,y})=>[[x,y],[x,y+128],[x+128,y+128],[x+128,y]]);
  points.forEach(()=>g.raw([1]));for(let axis=0;axis<2;axis++){let prev=0;for(const point of points){g.u16(point[axis]-prev);prev=point[axis];}}

@@ -45,7 +45,8 @@ test('host can spectate while both seats are held by guests, and a playing membe
  const seats=await Promise.all(['b','c'].map(key=>f.request(key,`/rooms/${id}/seat`,'POST',{play:true})));expect(seats.map(v=>v.data.seat).sort()).toEqual([0,1]);
  await f.request('a',`/rooms/${id}/phase`,'PUT',{phase:'playing'});
  expect((await f.request('b',`/rooms/${id}/seat`,'POST',{play:false})).data.seat).toBe(-1);
- expect((await f.request('a',`/rooms/${id}/seat`,'POST',{play:true})).status).toBe(409);
+ expect((await f.request('a',`/rooms/${id}/seat`,'POST',{play:true})).data.seat).toBe(0);
+ expect((await f.request('b',`/rooms/${id}/seat`,'POST',{play:true})).status).toBe(409);
  }finally{f.sql.close();}
 });
 test('room creation needs no region or cf metadata, and records player and host flags',async()=>{

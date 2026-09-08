@@ -10,7 +10,7 @@ export class MapLibrary{
  constructor(private prefs:Preferences,private save:()=>void,private palette:Uint8Array,private roomActions:{canSwitch:()=>boolean;switchMap:(level:Level)=>Promise<void>}){
   onMenu('maps-menu',()=>this.render());
   for(const id of ['map-search','map-filter'])el(id).addEventListener('input',()=>{this.page=0;this.render();});
-  click('maps-prev',()=>{this.page--;this.render();});click('maps-next',()=>{this.page++;this.render();});
+  click('maps-prev',()=>{this.page--;this.render();document.querySelector('.maps-scroll')!.scrollTop=0;});click('maps-next',()=>{this.page++;this.render();document.querySelector('.maps-scroll')!.scrollTop=0;});
   click('enable-maps',()=>{this.rotation=[...new Set([...this.rotation,...this.visible.map(l=>l.id)])];this.save();this.render();});
   input('map-files').onchange=()=>{this.importFiles(Array.from(input('map-files').files||[]));input('map-files').value='';};
   const drop=el('map-drop');drop.ondragover=e=>{e.preventDefault();drop.classList.add('dragging');};drop.ondragleave=()=>drop.classList.remove('dragging');drop.ondrop=e=>{e.preventDefault();drop.classList.remove('dragging');this.importFiles(Array.from(e.dataTransfer?.files||[]));};

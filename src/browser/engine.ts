@@ -11,6 +11,7 @@ export type EngineModule = {
   _liero_player(player:number):void;_liero_camera(x:number,y:number):void;
   HEAPU8: Uint8Array; HEAP32: Int32Array;
   _liero_start(seed: number, bot: number): number;
+  _liero_participants(mask:number):void;
   _liero_view(split:number,width:number,height:number): void;
   _liero_step_local(b:number,a:number,w:number,raw0:number,raw1:number): number;
   _liero_loadout(player:number,slot:number,id:number): void;
@@ -112,6 +113,7 @@ export class LocalGame {
     this.network=network;this.freeCamera=false;this.module._liero_player(network?.seat===1?1:0);
     this.module._liero_audio();this.module._liero_mute(this.sound?0:1);
     this.module._liero_start(seed,(localTwo||network)?0:1);
+    if(network)this.module._liero_participants(network.participants);
     this.active=true;this.paused=false;this.resize();
     this.canvas.focus(); this.raf=requestAnimationFrame(this.frame);
   }
