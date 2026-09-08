@@ -5,8 +5,9 @@ import type {WeaponLibrary} from './weapons-ui.ts';
 export const countryFlag=(country:string)=>/^[A-Z]{2}$/.test(country)?String.fromCodePoint(...[...country].map(c=>127397+c.charCodeAt(0))):'🌐';
 type Context={room:RoomClient;game:()=>LocalGame;engine:()=>EngineModule;weapons:()=>WeaponLibrary;names:()=>string[];playing:()=>boolean;seat:()=>number;sound:()=>boolean;setSound:(v:boolean)=>void;join:()=>Promise<void>;spectate:()=>Promise<void>;copy:()=>Promise<void>};
 export class ArenaUI{
- private shown=true;private camera:number|'free'='free';private chatSeq=0;private roomId='';private state=new Int32Array(44);private lastPanel=0;private deathSeq=[0,0];private cycle=-1;private weapon=-1;private weaponUntil=0;
+ private shown=true;private camera:number|'free'='free';private chatSeq=0;private roomId='';private state=new Int32Array(52);private lastPanel=0;private deathSeq=[0,0];private cycle=-1;private weapon=-1;private weaponUntil=0;
  constructor(private c:Context){
+  for(let p=0;p<2;p++){const label=el('worm-label-'+p),name=document.createElement('span');name.id='worm-name-'+p;name.className='worm-name';label.append(name);for(const kind of ['health','reload']){const bar=document.createElement('span'),fill=document.createElement('i');bar.className='worm-bar worm-'+kind;fill.id='worm-'+kind+'-'+p;bar.append(fill);label.append(bar);}}
   click('players-toggle',()=>{this.shown=!this.shown;el('player-panel').hidden=!this.shown;el('players-toggle').setAttribute('aria-expanded',String(this.shown));});
   click('sound-toggle',()=>{c.setSound(!c.sound());this.audio();});this.audio();
   click('toolbar-invite',c.copy);click('join-play',c.join);
@@ -40,8 +41,11 @@ export class ArenaUI{
   const canvas=el<HTMLCanvasElement>('game'),rect=canvas.getBoundingClientRect(),stage=el('stage').getBoundingClientRect();
   for(let p=0;p<2;p++){
    const label=el('worm-label-'+p),base=24+p*4,x=state[base],y=state[base+1];const own=p===seat;
-   label.hidden=!c.playing()||!state[base+2]||x<0||x>canvas.width||y<0||y>canvas.height||(own&&now>this.weaponUntil);
-   label.classList.toggle('own-weapon',own);label.textContent=own?(c.weapons()?.get(c.engine()._liero_weapon_id(state[base+3]))?.name||''):c.names()[p];
+   label.hidden=!c.playing()||!state[base+2]||x<0||x>canvas.width||y<0||y>canvas.height;
+   const name=el('worm-name-'+p),showWeapon=own&&now<this.weaponUntil;
+   name.classList.toggle('own-weapon',showWeapon);name.textContent=showWeapon?(c.weapons()?.get(c.engine()._liero_weapon_id(state[base+3]))?.name||''):c.names()[p];
+   const health=Math.max(0,Math.min(1,state[2+p*5]/Math.max(1,state[46+p*3]))),reload=Math.max(0,Math.min(1,1-state[47+p*3]/Math.max(1,state[48+p*3])));
+   el('worm-health-'+p).style.transform=`scaleX(${health})`;el('worm-reload-'+p).style.transform=`scaleX(${reload})`;
    label.style.left=rect.left-stage.left+x*rect.width/canvas.width+'px';label.style.top=rect.top-stage.top+(y-9)*rect.height/canvas.height+'px';
    const at=32+p*4,seq=state[at];if(seq>this.deathSeq[p]){this.deathSeq[p]=seq;if(state[0]-state[at+3]>140)continue;const killer=state[at+1],weapon=c.weapons()?.get(c.engine()._liero_weapon_id(state[at+2]));const entry=document.createElement('div');entry.className='kill-entry fade-message';const name=document.createElement('span');name.textContent=c.names()[killer]||'Environment';const gun=document.createElement('span');gun.className='kill-weapon';gun.textContent=weapon?.name||'—';const victim=document.createElement('span');victim.textContent=c.names()[p];entry.append(name);if(weapon){const icon=document.createElement('img');icon.src=weapon.icon;icon.alt='';entry.append(icon);}entry.append(gun,victim);el('kill-feed').append(entry);setTimeout(()=>entry.remove(),9000);}
   }

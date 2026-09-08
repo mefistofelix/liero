@@ -129,7 +129,7 @@ export class LocalGame {
     const ptr=this.module._liero_render();
     this.pixels.data.set(this.module.HEAPU8.subarray(ptr,ptr+this.pixels.data.length));
     this.context.putImageData(this.pixels,0,0);
-    const info=this.module._liero_info()>>2;this.onState(this.module.HEAP32.subarray(info,info+46));
+    const info=this.module._liero_info()>>2;this.onState(this.module.HEAP32.subarray(info,info+52));
   }
   private frame = (time: number) => {
     const menu=!!document.querySelector('dialog[open],#chat-compose:not([hidden])');

@@ -113,7 +113,9 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   ones push them beyond the eight-message limit. Input sits below the messages.
 - Kill feed sits below the player list: killer, actual weapon, victim; entries fade.
   Observe original StatsRecorder callbacks. Do not infer weapons from current loadouts.
-- Other worms display player names. Your worm briefly displays the weapon name on change.
+- Worm labels display the player name, with two thin bars below it for health and
+  current-weapon reload progress, including while spectating. Use original engine
+  health limits and reload timers. Your weapon name briefly replaces your name on change.
 - Startup: measure public room host RTT, prefer local-region reachable rooms; otherwise
   choose the lowest-ping reachable room elsewhere. If none are reachable, create public.
   Region is continent-level. Country flags derive from server geography, never guessed.

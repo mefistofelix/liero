@@ -15,7 +15,7 @@
 
 static std::unique_ptr<LocalController> session;
 static std::vector<unsigned char> rgba(320*200*4);
-static int info[46], rightMode[2], loadout[2][5]={{1,8,15,22,29},{1,8,15,22,29}};
+static int info[52], rightMode[2], loadout[2][5]={{1,8,15,22,29},{1,8,15,22,29}};
 // Presentation-only telemetry, using the original damage/death callbacks.
 static int deathSerial=0, deathCount[2]={}, deaths[2][4], fatalWeapon[2]={-1,-1};
 struct BrowserStats : NormalStatsRecorder {
@@ -255,6 +255,9 @@ EMSCRIPTEN_KEEPALIVE int* liero_info(){
     for(int p=0;p<2;++p){auto& w=*session->game.worms[p];int base=24+p*4;
         info[base]=ftoi(w.pos.x)-camera.x+camera.rect.x1;info[base+1]=ftoi(w.pos.y)-camera.y+camera.rect.y1;
         info[base+2]=w.visible;info[base+3]=int(w.weapons[w.currentWeapon].type-&gfx.common->weapons[0]);
+        auto& selected=w.weapons[w.currentWeapon];
+        info[46+p*3]=w.settings->health;info[47+p*3]=selected.loadingLeft;
+        info[48+p*3]=selected.type->computedLoadingTime(*session->game.settings);
         for(int i=0;i<4;++i)info[32+p*4+i]=deaths[p][i];}
     info[40]=camera.x;info[41]=camera.y;info[42]=viewWidth;info[43]=viewHeight;
     info[44]=deathCount[0];info[45]=deathCount[1];

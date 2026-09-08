@@ -26,6 +26,18 @@ test('kill telemetry reports the lethal original weapon without changing simulat
  const hash=m._liero_hash(),offset=m._liero_info()>>2,events=Array.from(m.HEAP32.subarray(offset+32,offset+40));
  expect(events[0]).toBeGreaterThan(0);expect(events[4]).toBeGreaterThan(events[0]);expect(events[1]).toBe(0);expect(events[5]).toBe(1);expect(m._liero_weapon_id(events[2])).toBe(1);expect(m._liero_weapon_id(events[6])).toBe(1);expect(m.HEAP32[offset+44]).toBe(1);expect(m.HEAP32[offset+45]).toBe(1);expect(m._liero_hash()).toBe(hash);
 });
+test('worm bars expose each player health limit and original reload timer independently of camera',async()=>{
+ const m=await fresh();m._liero_options(0,99,100,0,0);for(let p=0;p<2;p++)for(let slot=0;slot<5;slot++)m._liero_loadout(p,slot,1);m._liero_start(1,0);
+ const seen=[false,false];
+ for(let f=0;f<700;f++){
+  m._liero_step(8,0,0,f>350?8:0,64,0);
+  const offset=m._liero_info()>>2,values=Array.from(m.HEAP32.subarray(offset+46,offset+52));
+  for(let p=0;p<2;p++){expect(values[p*3]).toBeGreaterThan(0);expect(values[p*3+1]).toBeGreaterThanOrEqual(0);expect(values[p*3+1]).toBeLessThanOrEqual(values[p*3+2]);if(values[p*3+1]>0)seen[p]=true;}
+  if(f===350){expect(seen[0]).toBe(true);expect(seen[1]).toBe(false);}
+ }
+ expect(seen).toEqual([true,true]);const hash=m._liero_hash(),offset=m._liero_info()>>2,values=Array.from(m.HEAP32.subarray(offset+46,offset+52));m._liero_player(1);m._liero_info();expect(Array.from(m.HEAP32.subarray(offset+46,offset+52))).toEqual(values);expect(m._liero_hash()).toBe(hash);
+});
+
 test('original weapon availability restricts all five slots to the room pool',async()=>{
  const m=await fresh();for(let id=1;id<=40;id++)m._liero_allowed(id,id===1?1:0);m._liero_start(33,0);
  for(let n=0;n<5;n++){m._liero_step(0,96,1,0,32,0);m._liero_step(0,96,0,0,32,0);const p=m._liero_info()>>2;expect(m._liero_weapon_id(m.HEAP32[p+14])).toBe(1);}
