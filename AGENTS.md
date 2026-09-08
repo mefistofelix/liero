@@ -47,7 +47,8 @@ Its bundle identifies Haxe-to-JS, WebRTC host-authoritative netcode with predict
 and a wasm-flate decompression helper. Preserve provenance and licenses.
 
 ## Workspace
-- Repository root is the local gliptic/liero fork, branch `feature/mouse-regional-matchmaking`.
+- Repository root is the local gliptic/liero fork. Use ONLY `master`, locally and
+  on GitHub. The user explicitly forbids separate feature branches or worktrees.
 - `src/main.ts`: single local entrypoint. Run `bun run src/main.ts` or `./bun.exe run src/main.ts`.
 - `src/browser/`: browser interface, engine assets, local and remote input.
 - `src/server/`: D1-compatible matchmaking API and Bun SQLite adapter.
@@ -65,7 +66,7 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - Default presentation is full-page gameplay with a single player viewport, compact
   corner toolbars without a header. Split screen is an option
   for two local players sharing a keyboard, not the default online/bot presentation.
-- Public GitHub fork: https://github.com/mefistofelix/webliero . Commit and push meaningful,
+- Public GitHub fork: https://github.com/mefistofelix/liero . Commit and push meaningful,
   verified milestones, not half-working intermediate experiments.
 - `src/tasks/`: build/asset/test orchestration; `src/tests/`: automated verification.
 - `.local/build/{js,wasm}`: compiler outputs, never committed.

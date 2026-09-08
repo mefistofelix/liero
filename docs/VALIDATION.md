@@ -3,7 +3,7 @@
 - Bun 1.4.2 on Windows. `bun run dev` serves the game at port 3000.
 - `bun run engine` and `bun run engine:wasm` build successfully through Bun tasks,
   using Emscripten 6.0.9, Python/Clang, CMake and Ninja. No PowerShell build wrapper.
-- `bun run test`: 23 tests pass, including original keyboard JS/WASM fixtures,
+- `bun run test`: 25 tests pass, including original keyboard JS/WASM fixtures,
   deterministic rendering/cameras, contextual W/S and rope release, weapon pools,
   original lethal-weapon telemetry, room permissions and concurrent seat claims.
 - All 897 map entries have local LEV assets and PNG previews. Tests verify each
@@ -21,5 +21,6 @@
   approximately 93 seconds was saved and decoded by the browser video player.
 
 These checks do not establish exhaustive 1:1 parity, internet NAT reliability,
-or D1 deployment behavior. The app remains a local preview; no hosting deployment
-has been performed. See stack.md and PORTING.md for implementation limits.
+or every D1 deployment behavior. The first hosted release was deployed successfully
+through Sites with a Cloudflare Worker, D1 migrations and all static assets.
+See stack.md and PORTING.md for implementation limits.
