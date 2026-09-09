@@ -79,6 +79,23 @@ test('worm bars expose each player health limit and original reload timer indepe
  expect(seen).toEqual([true,true]);const hash=m._liero_hash(),offset=m._liero_info()>>2,values=Array.from(m.HEAP32.subarray(offset+46,offset+52));m._liero_player(1);m._liero_info();expect(Array.from(m.HEAP32.subarray(offset+46,offset+52))).toEqual(values);expect(m._liero_hash()).toBe(hash);
 });
 
+test('mouse aim preserves subpixels and original shot/rope origins within the 128 native angles',async()=>{
+ const m=await fresh();m._liero_start(321,0);m._liero_begin_play();m._liero_view(0,504,350);
+ for(const player of [0,1]){
+  m._liero_player(player);const offset=m._liero_info()>>2,x=m.HEAP32[offset+24+player*4],y=m.HEAP32[offset+25+player*4],hash=m._liero_hash();
+  expect(m._liero_aim(player,x+10,y-1,8)).toBe(96);
+  expect(m._liero_aim(player,x+10,y,16)).toBe(96);
+  expect(m._liero_aim(player,x+10,y-1,8|16)).toBe(96);
+  expect(m._liero_aim(player,x+10,y-1+.20,8)).toBe(96);
+  expect(m._liero_aim(player,x+10,y-1+.30,8)).toBe(97);
+  for(let a=0;a<128;a++){
+   const radians=a*Math.PI/64;
+   expect(m._liero_aim(player,x-50*Math.sin(radians),y-1+50*Math.cos(radians),8)).toBe(a);
+  }
+  expect(m._liero_hash()).toBe(hash);
+ }
+});
+
 test('mouse fire works with rope and wheel modifiers, and explicit release wins during scrolling',async()=>{
  const ready=async()=>{const m=await fresh();for(let slot=0;slot<5;slot++)m._liero_loadout(0,slot,1);m._liero_start(321,0);for(let f=0;f<300;f++)m._liero_step(0,64,0,0,64,0);return m;};
  const rope=await ready(),ptr=rope._liero_info()>>2,ammo=rope.HEAP32[ptr+12];rope._liero_step(8|16,64,0,0,64,0);rope._liero_info();expect(rope.HEAP32[ptr+12]).toBe(ammo-1);expect(rope.HEAP32[ptr+5]).toBe(1);

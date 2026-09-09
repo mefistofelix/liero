@@ -10,6 +10,7 @@
 #include "game/stats_recorder.hpp"
 #include <algorithm>
 #include <cstdint>
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -308,13 +309,20 @@ EMSCRIPTEN_KEEPALIVE unsigned char* liero_render(){
     }
     return rgba.data();
 }
-EMSCRIPTEN_KEEPALIVE int liero_aim(int p,int x,int y){
+EMSCRIPTEN_KEEPALIVE int liero_aim(int p,double x,double y,int buttons){
     if(!session||p<0||p>1)return 32;
     auto vp=presentation(p);auto& w=*session->game.worms[p];
-    int dx=x-vp.rect.x1+vp.x-ftoi(w.pos.x),dy=y-vp.rect.y1+vp.y-ftoi(w.pos.y);
-    if(!dx&&!dy)return ftoi(w.aimingAngle)&127;
-    int best=0;int64_t bestDot=INT64_MIN;
-    for(int a=0;a<128;++a){int64_t dot=int64_t(dx)*cossinTable[a].x+int64_t(dy)*cossinTable[a].y;
+    // Preserve subpixel input and the original launch origins: shots start one
+    // pixel above the worm; rope/dig use its center. Fire wins for mouse chords.
+    const bool ropeAim=(buttons&16)&&!(buttons&8);
+    double dx=x-vp.rect.x1+vp.x-double(w.pos.x)/65536.0;
+    double dy=y-vp.rect.y1+vp.y-double(w.pos.y)/65536.0+(ropeAim?0.0:1.0);
+    if(!std::isfinite(dx)||!std::isfinite(dy)||(!dx&&!dy))return ftoi(w.aimingAngle)&127;
+    int best=0;double bestDot=-INFINITY;
+    // Select among the unchanged native directions. Normalize the table's tiny
+    // fixed-point length differences rather than favoring a slightly longer vector.
+    for(int a=0;a<128;++a){double vx=cossinTable[a].x,vy=cossinTable[a].y;
+        double dot=(dx*vx+dy*vy)/std::sqrt(vx*vx+vy*vy);
         if(dot>bestDot){bestDot=dot;best=a;}}
     return best;
 }

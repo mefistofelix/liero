@@ -5,8 +5,8 @@ test('mouse chords work, and menus suppress input while the local simulation kee
  const previous=Object.fromEntries(Object.keys(stubs).map(k=>[k,Object.getOwnPropertyDescriptor(globalThis,k)]));
  for(const [key,value]of Object.entries(stubs))Object.defineProperty(globalThis,key,{value,configurable:true});
  try{
-  const canvas:any=new EventTarget();Object.assign(canvas,{width:320,height:200,parentElement:{},getContext:()=>({putImageData(){}}),getBoundingClientRect:()=>({left:0,top:0,width:320,height:200}),focus(){},setPointerCapture(){}});
-  const steps:number[][]=[];const engine={HEAPU8:new Uint8Array(320*200*4),HEAP32:new Int32Array(52),_liero_render:()=>0,_liero_info:()=>0,_liero_aim:()=>64,_liero_step:(...input:number[])=>{steps.push(input);return 1;}};
+  let rect={left:0,top:0,width:320,height:200};const canvas:any=new EventTarget();Object.assign(canvas,{width:320,height:200,parentElement:{},getContext:()=>({putImageData(){}}),getBoundingClientRect:()=>rect,focus(){},setPointerCapture(){}});
+  const aims:number[][]=[],steps:number[][]=[];const engine={HEAPU8:new Uint8Array(320*200*4),HEAP32:new Int32Array(52),_liero_render:()=>0,_liero_info:()=>0,_liero_aim:(...input:number[])=>{aims.push(input);return 64;},_liero_step:(...input:number[])=>{steps.push(input);return 1;}};
   const game:any=new LocalGame(engine as any,canvas,()=>{},()=>{});
   const dispatch=(type:string,buttons:number,button:number)=>{const e=new Event(type,{cancelable:true});Object.assign(e,{buttons,button,pointerId:1,clientX:10,clientY:10});canvas.dispatchEvent(e);return e;};
   expect(dispatch('pointerdown',2,2).defaultPrevented).toBe(false);expect(game.buttons).toBe(2);
@@ -14,6 +14,8 @@ test('mouse chords work, and menus suppress input while the local simulation kee
   game.pendingButtons=0;dispatch('pointermove',2,0);expect(game.buttons).toBe(2);expect(game.pendingButtons).toBe(0);
   dispatch('pointermove',6,1);expect(game.buttons).toBe(6);expect(game.pendingButtons&4).toBe(4);
   stubs.document.querySelector=()=>({});game.frame(10);game.frame(30);expect(steps).toHaveLength(1);expect(steps[0][0]).toBe(0);expect(steps[0][2]).toBe(0);
+  // A stationary pointer must be reprojected after resizing, without rounding.
+  stubs.document.querySelector=()=>null;rect={left:1,top:2,width:640,height:400};game.frame(50);expect(aims.at(-1)?.slice(1,3)).toEqual([4.5,4]);
   game.events.abort();
  }finally{for(const [key,descriptor]of Object.entries(previous)){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete (globalThis as any)[key];}}
 });

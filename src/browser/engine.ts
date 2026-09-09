@@ -18,7 +18,7 @@ export type EngineModule = {
   _liero_loadout(player:number,slot:number,id:number): void; _liero_loadout_live(player:number):void;
   _liero_weapon_name(id:number): number; _liero_mute(muted:number): void;
   _liero_step(b0: number,a0: number,w0: number,b1: number,a1: number,w1: number): number;
-  _liero_render(): number; _liero_aim(player: number,x: number,y: number): number;
+  _liero_render(): number; _liero_aim(player: number,x: number,y: number,buttons: number): number;
   _liero_info(): number; _liero_hash(): number; _liero_audio(): void;
 };
 let modulePromise: Promise<EngineModule> | undefined;
@@ -52,6 +52,7 @@ export class LocalGame {
   private pendingButtons = 0;
   private wheel = 0;
   private mouse = {x: 100, y: 80};
+  private pointerClient?:{x:number;y:number};
   private events = new AbortController();
   private pixels = new ImageData(320,200);
   private context: CanvasRenderingContext2D;
@@ -105,6 +106,7 @@ export class LocalGame {
       this.module._liero_camera(this.camera.x,this.camera.y);if(this.previewing)this.render();
     }
     this.dragPoint={x:event.clientX,y:event.clientY};
+    this.pointerClient={x:event.clientX,y:event.clientY};
     this.mouse = {x: (event.clientX-rect.left)*this.canvas.width/rect.width, y: (event.clientY-rect.top)*this.canvas.height/rect.height};
   };
   private dragPoint={x:0,y:0};
@@ -155,6 +157,7 @@ export class LocalGame {
     if(this.paused){this.clear();this.raf=requestAnimationFrame(this.frame);return;}
     if(menu){this.keys.clear();this.pendingKeys.clear();this.buttons=0;this.pendingButtons=0;this.wheel=0;}
     this.network?.catchUp();
+    if(this.pointerClient){const rect=this.canvas.getBoundingClientRect();if(rect.width&&rect.height)this.mouse={x:(this.pointerClient.x-rect.left)*this.canvas.width/rect.width,y:(this.pointerClient.y-rect.top)*this.canvas.height/rect.height};}
     if (!this.last) this.last = time;
     this.debt += Math.min(100, time-this.last); this.last=time;
     while (this.debt >= 1000/70) {
@@ -164,7 +167,7 @@ export class LocalGame {
         |((mouse&1)||down(5)?8:0)|((mouse&2)?16:0)|(down(2)?64:0)|(down(3)?128:0);
       const consumesInput=!this.network||this.network.needsInput;
       const wheel = Math.sign(this.wheel);if(consumesInput)this.wheel-=wheel;
-      const aim = this.module._liero_aim(this.network?.seat===1?1:0,Math.round(this.mouse.x),Math.round(this.mouse.y));
+      const aim = this.module._liero_aim(this.network?.seat===1?1:0,this.mouse.x,this.mouse.y,b);
       if(this.freeCamera){this.camera.x=Math.max(0,Math.min(504,this.camera.x+((b&2)?2:0)-((b&1)?2:0)));this.camera.y=Math.max(0,Math.min(350,this.camera.y+(down(3)?2:0)-(down(2)?2:0)));this.module._liero_camera(this.camera.x,this.camera.y);}
       if(this.network){if(this.network.ended){this.stop();this.onEnd();return;}const advanced=this.network.advance([b,aim,wheel]);if(consumesInput){this.pendingKeys.clear();this.pendingButtons=0;}if(!advanced)break;this.debt-=1000/70;continue;}
       const playing=this.localTwo?this.module._liero_step_local(b,aim,wheel,this.keyboardOnly?this.keyboard(0):-1,this.keyboard(1)):this.module._liero_step(b,aim,wheel,0,96,0);
