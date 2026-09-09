@@ -11,14 +11,14 @@ import {controlsUI} from './controls-ui.ts';
 import {ArenaUI} from './arena-ui.ts';
 import {countryFlag} from './flags.ts';
 import {compareRooms,includeRoom,type RoomSort} from './room-list.ts';
-import {el,input,select,button,notice,report,click,form,onMenu,onMenuClose,openMenu,closeMenus,menuHandler} from './ui.ts';
+import {el,input,select,button,setDisabled,notice,report,click,form,onMenu,onMenuClose,openMenu,closeMenus,menuHandler} from './ui.ts';
 
 const prefs=readPreferences(),canvas=el<HTMLCanvasElement>('game'),room=new RoomClient(),recorder=new GameRecorder();
 const modeNames=['Kill ’em all','Game of tag','Holdazone','Scales of justice'];
 let module:EngineModule,game:LocalGame,maps:MapLibrary,weapons:WeaponLibrary,playing=false,localTwo=false,follow=0;
 let stats=new Int32Array(20),activeLoadouts=prefs.loadouts.map(a=>[...a]),playerNames=[prefs.name,'Bot'];
 let round:NetworkRound|undefined,setup:any,staging:any,peerLoadouts=new Map<string,number[]>(),peerPings:Record<string,number>={};
-let nextMapId:string|undefined;
+let nextMapId:string|undefined;let startingRound:Promise<void>|undefined;
 let stopping=false,lastRulesKey='',profilePlayer=0,profileTimer=0;let profileSaving=false,profileDirty=false;
 let templeData:Uint8Array;
 let mapData:Uint8Array|null=null,roundTimeout=0,busy=false,roomListVersion=0,quickMatching=false;
@@ -38,7 +38,7 @@ function applyRules(rules:Rules,loadouts:number[][],colors:string[],data:Uint8Ar
  activeLoadouts=loadouts.map(a=>[...a]);
 }
 function profileButtons(){const two=localTwo&&!room.id;el('profile2-toggle').hidden=!two;el('profile-toggle').title=two?'Player 1 profile':'Your profile';el('profile-toggle').setAttribute('aria-label',two?'Player 1 profile':'Your profile');}
-function showGame(){profileButtons();arena.reset();playing=true;el('hud').hidden=localTwo||!!round?.spectator;el('spectator-tools').hidden=!round?.spectator;el<HTMLButtonElement>('record-start').disabled=!recorder.supported();if(!round||el<HTMLDialogElement>('rooms-menu').open)closeMenus();arena.playButton();}
+function showGame(){profileButtons();arena.reset();playing=true;el('hud').hidden=localTwo||!!round?.spectator;el('spectator-tools').hidden=!round?.spectator;setDisabled(el<HTMLButtonElement>('record-start'),!recorder.supported());if(!round||el<HTMLDialogElement>('rooms-menu').open)closeMenus();arena.playButton();}
 function endGame(){playing=false;arena.reset();el('hud').hidden=true;el('spectator-tools').hidden=true;if(room.id){notice('Round complete. Waiting for the next round.');el('round-status').textContent='Round complete. The next round uses the next map in the rotation.';}else{openMenu('rooms-menu');notice('Round complete. Choose your next game.');}}
 async function startLocal(two=false){await guard(async()=>{if(!module)return;if(room.id)await leaveRoom();clearTimeout(roundTimeout);roundTimeout=0;round=undefined;setup=undefined;const next=await maps.next();mapData=next.data;localTwo=two;follow=0;playerNames=[prefs.name,two?prefs.player2.name:'Bot'];applyRules(prefs.rules,prefs.loadouts,[prefs.color,two?prefs.player2.color:'#3cac3c'],mapData);el('map-name').textContent=next.level.name;game.start(two,prefs.keyboardOnly);showGame();});}
 click('play-bot',()=>startLocal());click('play-local',()=>startLocal(true));
@@ -72,7 +72,7 @@ async function togglePlay(){
   return;
  }
  if(!room.id){if(!game){openMenu('rooms-menu');return;}await startLocal(localTwo);return;}
- await room.call('seat','POST',{play:true});closeMenus();await room.refresh();arena.playButton();
+ await room.call('seat','POST',{play:true});if(!room.host)room.send(room.room!.owner,{type:'seat-changed'});closeMenus();await room.refresh();if(room.host&&startingRound)await startingRound;arena.playButton();
 }
 form('settings-form',async()=>{prefs.rules={...prefs.rules,mode:Number(select('game-mode').value),lives:Number(input('rule-lives').value),loading:Number(input('rule-loading').value),bonuses:Number(input('rule-bonuses').value)};save();game?.setSound(prefs.sound);if(room.id){if(!room.host)throw new Error('Only the host can change room rules.');await saveRoomSettings();}if(!room.id&&playing)applyLiveRules(module,prefs.rules);notice('Settings saved and applied.');});
 click('fullscreen',async()=>{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();});
@@ -106,7 +106,7 @@ async function autoConnect(){
  measured.sort((a,b)=>a.ping-b.ping);for(const candidate of measured){try{await joinRoom(candidate.room.id,'',true);return;}catch{}}
  await createRoom(true);
 }
-onMenu('room-settings-menu',()=>{const r=room.room,editable=!r||room.host,rules=r?.settings||prefs.rules;select('game-mode').value=String(rules.mode);input('rule-lives').value=String(rules.lives);input('rule-loading').value=String(rules.loading);input('rule-bonuses').value=String(rules.bonuses);el('settings-form').querySelectorAll<HTMLInputElement|HTMLButtonElement|HTMLSelectElement>('input,button,select').forEach(control=>control.disabled=!editable);el('room-settings-access').textContent=r?r.name+' · '+(editable?'You can edit this room.':'View only · only the host can change room rules.'):'Defaults for your next room or local game.';});
+onMenu('room-settings-menu',()=>{const r=room.room,editable=!r||room.host,rules=r?.settings||prefs.rules;select('game-mode').value=String(rules.mode);input('rule-lives').value=String(rules.lives);input('rule-loading').value=String(rules.loading);input('rule-bonuses').value=String(rules.bonuses);el('settings-form').querySelectorAll<HTMLInputElement|HTMLButtonElement|HTMLSelectElement>('input,button,select').forEach(control=>setDisabled(control,!editable));el('room-settings-access').textContent=r?r.name+' · '+(editable?'You can edit this room.':'View only · only the host can change room rules.'):'Defaults for your next room or local game.';});
 async function leaveRoom(){nextMapId=undefined;maps?.setRoom(undefined);weapons?.setAvailability(weaponPool(prefs.rules.allowedWeapons));clearTimeout(roundTimeout);roundTimeout=0;recorder.stop();game?.stop();playing=false;round=undefined;setup=undefined;staging=undefined;quickMatching=false;peerLoadouts.clear();peerPings={};await room.leave();history.replaceState(null,'',location.pathname);el('room-browser').hidden=false;el('room-lobby').hidden=true;el('rooms-heading').textContent='Room Browser';el('connection').textContent='Local';el('hud').hidden=true;el('spectator-tools').hidden=true;arena.reset();el('overlay-players').replaceChildren();el('player-count').textContent='0';}
 click('leave-room',async()=>{await leaveRoom();if(!el<HTMLDialogElement>('rooms-menu').open)openMenu('rooms-menu');else await refreshRooms();});
 const inviteURL=()=>location.origin+'/#room='+room.id+(room.room?.private?'&invite='+room.invite:'');
@@ -120,8 +120,8 @@ function renderRoom(r:Room){
  if(!r)return;if(room.host&&round&&!round.ended&&rulesKey(r.settings)!==lastRulesKey){round.queueRules(r.settings);lastRulesKey=rulesKey(r.settings);}for(const m of r.members)if(m.seat>=0){setAppearance(m.seat,m.name,m.color);if(setup?.playerIds?.[m.seat]===m.id){setup.players[m.seat]=m.name;setup.colors[m.seat]=m.color;}}maps?.setRoom(room.host?undefined:r.settings.rotation);weapons?.setAvailability(weaponPool(r.settings.allowedWeapons));arena.room(r,pingFor);el('room-description').replaceChildren(countryFlag(r.country),document.createTextNode(' '+(r.private?'Private':'Public')+' · '+r.count+'/'+r.capacity));
  const members=el('members');members.replaceChildren();for(const m of r.members){const row=document.createElement('div');row.className='member';const dot=document.createElement('span');dot.className='worm-dot';dot.style.background=m.color;const name=document.createElement('span');name.className='member-name';name.textContent=m.name+(m.id===r.self?' (you)':'');const role=document.createElement('span');role.className='role';role.textContent=m.seat>=0?'Player '+(m.seat+1)+(m.id===r.owner?' / host':''):'Spectator'+(m.id===r.owner?' / host':'');const ping=document.createElement('span');ping.className='ping';const ms=pingFor(m.id);ping.textContent=ms===undefined?'—':ms+' ms';row.append(countryFlag(m.country),dot,name,role,ping);members.append(row);}
  const log=el('chat-history'),last=log.dataset.last||'';const next=String(r.chat.at(-1)?.seq||'');if(last!==next){const bottom=log.scrollHeight-log.scrollTop-log.clientHeight<35;log.replaceChildren();for(const msg of r.chat){const p=document.createElement('p'),name=document.createElement('strong');name.textContent=msg.name;p.append(name,document.createTextNode(msg.message));log.append(p);}log.dataset.last=next;if(bottom)log.scrollTop=log.scrollHeight;}
- el<HTMLButtonElement>('start-round').hidden=!room.host;const players=r.members.filter(m=>m.seat>=0),ready=players.length>0&&players.every(m=>m.id===r.self||peerLoadouts.has(m.id));el<HTMLButtonElement>('start-round').disabled=!ready||!!round&&!round.ended;
- el<HTMLButtonElement>('take-seat').hidden=false;el<HTMLButtonElement>('take-seat').disabled=room.seat<0&&players.length>=2;el('take-seat').textContent=room.seat<0?'Join game':'Switch to spectator';
+ el<HTMLButtonElement>('start-round').hidden=!room.host;const players=r.members.filter(m=>m.seat>=0),ready=players.length>0&&players.every(m=>m.id===r.self||peerLoadouts.has(m.id));setDisabled(el<HTMLButtonElement>('start-round'),!ready||!!round&&!round.ended);
+ el<HTMLButtonElement>('take-seat').hidden=false;setDisabled(el<HTMLButtonElement>('take-seat'),room.seat<0&&players.length>=2);el('take-seat').textContent=room.seat<0?'Join game':'Switch to spectator';
  el('round-status').textContent=r.phase==='playing'?'Round in progress. Spectators can follow either player or use free camera.':ready?'Starting the game…':'Press Play to start, even on your own.';
  el('room-rules').textContent=modeNames[r.settings.mode]+'\nLives: '+r.settings.lives+'\nLoading: '+r.settings.loading+'%\nBonuses: '+r.settings.bonuses+'\nRotation: '+r.settings.rotation.length+' maps';
  const ping=room.host?0:room.pings.get(r.owner);el('connection').replaceChildren(countryFlag(r.country),document.createTextNode(' '+r.name+' · '+(ping===undefined?'Connecting…':ping+' ms')+(r.phase==='lobby'?' · Waiting for players':'')));
@@ -150,13 +150,13 @@ function launchNetwork(value:any,data:Uint8Array|null){
  game.start(false,false,value.seed,round);game.setSound(prefs.sound);select('camera').options[0].textContent='Follow '+playerNames[0];select('camera').options[1].textContent='Follow '+playerNames[1];select('camera').value=String(follow);showGame();if(round.spectator)arena.nextCamera(true);
 }
 function roomTimeoutNext(){clearTimeout(roundTimeout);roundTimeout=0;roundTimeout=window.setTimeout(()=>{roundTimeout=0;if(room.host&&room.id&&room.room?.members.filter(m=>m.seat>=0).length>0)startOnline().catch(report);},5000);}
-async function startOnline(mapId?:string,restart=false){await guard(async()=>{
+async function startOnline(mapId?:string,restart=false){if(startingRound)return startingRound;const task=guard(async()=>{
  if(!room.host||!room.room)throw new Error('Only the host can start a round.');if(round&&!round.ended&&!restart)throw new Error('A round is already running.');
  const players=[0,1].map(p=>room.room!.members.find(m=>m.seat===p));if(!players.some(Boolean)||players.some(m=>m&&m.id!==room.room!.self&&!peerLoadouts.has(m.id)))throw new Error('Wait for the players to connect.');
- await saveRoomSettings();const chosen=mapId??nextMapId,next=chosen?await maps.pick(chosen):await maps.next();nextMapId=undefined;clearTimeout(roundTimeout);roundTimeout=0;const loadouts=players.map(m=>!m||m.id===room.room!.self?[...prefs.loadouts[0]]:[...peerLoadouts.get(m.id)!]);
+ const chosen=mapId??nextMapId,next=chosen?await maps.pick(chosen):await maps.next();nextMapId=undefined;clearTimeout(roundTimeout);roundTimeout=0;const loadouts=players.map(m=>!m||m.id===room.room!.self?[...prefs.loadouts[0]]:[...peerLoadouts.get(m.id)!]);
  const value={version:NETWORK_VERSION,id:crypto.randomUUID(),seed:crypto.getRandomValues(new Uint32Array(1))[0],rules:{...prefs.rules},loadouts,colors:players.map(m=>m?.color||'#3cac3c'),players:players.map(m=>m?.name||''),playerIds:players.map(m=>m?.id??null),participants:players.reduce((mask,m,p)=>mask|(m?1<<p:0),0),map:{id:next.level.id,name:next.level.name,bytes:next.data?.length||0}};
- await room.call('phase','PUT',{phase:'playing'});launchNetwork(value,next.data);for(const m of room.room.members)if(m.id!==room.room.self)sendSetup(m.id);
-});}
+ launchNetwork(value,next.data);for(const m of room.room.members)if(m.id!==room.room.self)sendSetup(m.id);await room.call('phase','PUT',{phase:'playing'});
+});startingRound=task;try{await task;}finally{if(startingRound===task)startingRound=undefined;}}
 async function switchRoomMap(level:Level){
  if(!room.host||!room.room)throw new Error('Only the host can change the map.');
  const players=room.room.members.filter(m=>m.seat>=0);
@@ -168,10 +168,11 @@ async function switchRoomMap(level:Level){
 click('start-round',async()=>{await startOnline();closeMenus();});
 room.onPacket=(from,packet)=>{
  try{
+  if(packet.type==='seat-changed'&&room.host&&room.room?.members.some(m=>m.id===from)){void room.refresh().catch(report);return;}
   if(packet.type==='chat-delivery'&&!room.host&&from===room.room?.owner){arena.receiveChat(packet.message);return;}
   if(packet.type==='chat-posted'&&room.host){const member=room.room?.members.find(m=>m.id===from),msg=packet.message;if(!member||!msg||msg.player!==from||typeof msg.message!=='string'||msg.message.length>500||!Number.isSafeInteger(msg.seq))return;const message={...msg,name:member.name};arena.receiveChat(message);room.broadcast({type:'chat-delivery',message});return;}
   if(packet.type==='loadout'&&room.host&&validLoadout(packet.loadout)&&room.room?.members.some(m=>m.id===from)){peerLoadouts.set(from,[...packet.loadout]);const seat=room.room?.members.find(m=>m.id===from)?.seat??-1;if(seat>=0)round?.queueLoadout(seat,packet.loadout);return;}
-  if(packet.type==='ready'&&room.host){if(packet.version!==NETWORK_VERSION){room.send(from,{type:'update-required'});notice('A player needs to reload Liero before joining.');return;}if(!validLoadout(packet.loadout))return;peerLoadouts.set(from,packet.loadout);if(setup&&(!round||!round.ended))sendSetup(from);return;}
+  if(packet.type==='ready'&&room.host){if(packet.version!==NETWORK_VERSION){room.send(from,{type:'update-required'});notice('A player needs to reload Liero before joining.');return;}if(!validLoadout(packet.loadout))return;peerLoadouts.set(from,packet.loadout);if(setup&&(!round||!round.ended))sendSetup(from);void room.refresh().catch(report);return;}
   if(packet.type==='update-required'&&from===room.room?.owner){notice('Reload Liero to join this room: the game version has changed.');return;}
   if(packet.type==='pings'&&!room.host&&from===room.room?.owner){peerPings=packet.pings||{};return;}
   if(packet.type==='ended'&&from===room.room?.owner&&packet.round===round?.id){round!.ended=true;game.stop();endGame();return;}
@@ -199,9 +200,9 @@ async function renderArchive(extra?:Recording){
  for(const r of recordings){const row=document.createElement('article');row.className='recording';const video=document.createElement('video'),url=URL.createObjectURL(r.blob);archiveURLs.push(url);video.src=url;video.controls=true;video.preload='metadata';const info=document.createElement('div'),title=document.createElement('h3');title.textContent=r.name;const detail=document.createElement('p');detail.className='small';detail.textContent=new Date(r.date).toLocaleString('en-GB')+' · '+Math.round(r.duration/1000)+' s · '+(r.blob.size/1024/1024).toFixed(1)+' MB';const actions=document.createElement('div');actions.className='actions';const download=document.createElement('a');download.href=url;download.download='liero-'+new Date(r.date).toISOString().replace(/[:.]/g,'-')+'.mp4';download.textContent='Download MP4';actions.append(download,button('Delete',async()=>{await deleteRecording(r.id);await renderArchive();},'danger'));info.append(title,detail,actions);row.append(video,info);list.append(row);}
  if(!recordings.length)list.textContent='No recordings yet.';
 }
-onMenu('recordings-menu',()=>{el<HTMLButtonElement>('record-start').disabled=!playing||recorder.active||!recorder.supported();if(!recorder.supported())el('record-status').textContent='MP4 recording is not supported by this browser. Try a browser with MP4 MediaRecorder support.';return renderArchive();});
-click('record-start',()=>{if(!playing)throw new Error('Start or watch a game first.');recorder.start(canvas,module.audioStream,room.room?.name||'Local game');el('recording-indicator').hidden=false;el<HTMLButtonElement>('record-start').disabled=true;el<HTMLButtonElement>('record-stop').disabled=false;closeMenus();});
-click('record-stop',()=>recorder.stop());recorder.onError=error=>{el('recording-indicator').hidden=true;el<HTMLButtonElement>('record-start').disabled=!playing;el<HTMLButtonElement>('record-stop').disabled=true;report(error);};recorder.onSaved=(recording,persisted)=>{el('recording-indicator').hidden=true;el<HTMLButtonElement>('record-start').disabled=!playing;el<HTMLButtonElement>('record-stop').disabled=true;notice(persisted?'Recording saved to the local archive.':'Archive storage is full. Download this recording before closing the page.');renderArchive(recording).catch(report);};
+onMenu('recordings-menu',()=>{setDisabled(el<HTMLButtonElement>('record-start'),!playing||recorder.active||!recorder.supported());if(!recorder.supported())el('record-status').textContent='MP4 recording is not supported by this browser. Try a browser with MP4 MediaRecorder support.';return renderArchive();});
+click('record-start',()=>{if(!playing)throw new Error('Start or watch a game first.');recorder.start(canvas,module.audioStream,room.room?.name||'Local game');el('recording-indicator').hidden=false;setDisabled(el<HTMLButtonElement>('record-start'),true);setDisabled(el<HTMLButtonElement>('record-stop'),false);closeMenus();});
+click('record-stop',()=>recorder.stop());recorder.onError=error=>{el('recording-indicator').hidden=true;setDisabled(el<HTMLButtonElement>('record-start'),!playing);setDisabled(el<HTMLButtonElement>('record-stop'),true);report(error);};recorder.onSaved=(recording,persisted)=>{el('recording-indicator').hidden=true;setDisabled(el<HTMLButtonElement>('record-start'),!playing);setDisabled(el<HTMLButtonElement>('record-stop'),true);notice(persisted?'Recording saved to the local archive.':'Archive storage is full. Download this recording before closing the page.');renderArchive(recording).catch(report);};
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(console.error);
 window.addEventListener('pagehide',()=>{void room.leave().catch(()=>{});recorder.stop();game?.dispose();});
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});

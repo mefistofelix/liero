@@ -42,3 +42,10 @@ button{display:inline-flex;align-items:center;justify-content:center}#spectate-l
 .loadout-presets{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-top:16px}.loadout-presets .actions{margin:0}.loadout-slots [draggable=true]{cursor:grab}.loadout-slots .dragging{opacity:.4}.loadout-slots .drop-target{outline:2px solid var(--accent);outline-offset:2px}#worm-labels .own-weapon{line-height:1.1;color:#e7edb5}#profile2-toggle{width:auto}
 
 #create-panel .form-grid>.check{align-self:end;min-height:34px;margin:0}input[type=checkbox]{padding:0;margin:0;flex-shrink:0;vertical-align:middle}
+
+/* Preserve the button size and accessible name while its request is pending. */
+button[aria-busy=true]{position:relative;color:transparent!important;pointer-events:none;cursor:wait}
+button[aria-busy=true]>*{visibility:hidden}
+button[aria-busy=true]::after{content:'';position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border:2px solid #e5e7dd55;border-top-color:#e5e7dd;border-radius:50%;animation:button-loading .7s linear infinite}
+@keyframes button-loading{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){button[aria-busy=true]::after{animation:none;border-style:dotted}}

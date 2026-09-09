@@ -192,7 +192,7 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
   Unexpected crashes/offline quits still rely on the 120-second membership expiry.
 - Named loadout presets are saved separately for each local player. Selecting, editing
   or dragging slots applies immediately; Alt+Left/Right also reorders slots. Online
-  changes are host-committed with frame history (protocol 3). Retain ammunition and
+  changes are host-committed with frame history (protocol 4). Retain ammunition and
   reload progress of kept weapons; newly added weapons start their normal reload.
 - Split screen shows a second profile toolbar button; player 1 remains the online
   profile. Close Profile to save and apply, without a Save button or live typing updates.
@@ -201,3 +201,12 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
 - Held W must not detach a rope in flight; it shortens once attached. Space/middle
   still explicitly release it. Help sits immediately before the sound button.
 - Derive PWA and Apple icons from the bundled favicon with the Bun assets:icons task.
+
+- Asynchronous button/form actions show an in-button spinner and disable the trigger
+  until settlement, preventing repeated submissions. Restore it after success/error;
+  retain disabled conditions updated by room state while an action was pending.
+
+- Instant Play must call the original beginRespawn algorithm before making the worm
+  visible; initial worms have a 150-tick countdown and uninitialized (0,0) position.
+  Do not reset/save room rules before each round. Start the prepared simulation before
+  awaiting its directory phase update; notify the host immediately of seat changes.

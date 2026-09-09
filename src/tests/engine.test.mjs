@@ -145,3 +145,12 @@ test('Play spawns immediately without fire and live loadout reordering preserves
  for(let k=0;k<5;k++)m._liero_loadout(0,k,1);m._liero_loadout_live(0);m._liero_info();expect(m._liero_weapon_id(m.HEAP32[p+27])).toBe(1);expect(m.HEAP32[p+47]).toBeGreaterThan(0);expect(m.HEAP32[p+26]).toBe(1);
  m._liero_step(256,64,0,0,64,0);for(let f=0;f<350;f++)m._liero_step(0,64,0,0,64,0);m._liero_info();expect(m.HEAP32[p+26]).toBe(1);
 });
+
+test('instant Play uses valid original Temple spawn positions instead of the uninitialized origin',async()=>{
+ const m=await fresh(),temple=new Uint8Array(await Bun.file(new URL('../browser/maps/temple.lev',import.meta.url)).arrayBuffer());m.FS.writeFile('/import.lev',temple);m._liero_options(0,99,20,0,1);
+ for(const seed of [1,123,789])for(const mask of [1,2,3]){
+  m._liero_start(seed,0);m._liero_participants(mask);m._liero_begin_play();m._liero_view(0,504,350);m._liero_camera(252,175);
+  const ptr=m._liero_info()>>2;
+  for(let player=0;player<2;player++){if(!(mask&(1<<player)))continue;const base=ptr+24+player*4;expect(m.HEAP32[base+2]).toBe(1);expect(m.HEAP32[base]).toBeGreaterThan(5);expect(m.HEAP32[base]).toBeLessThan(499);expect(m.HEAP32[base+1]).toBeGreaterThan(5);expect(m.HEAP32[base+1]).toBeLessThan(345);}
+ }
+});

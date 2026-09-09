@@ -112,7 +112,7 @@ Le presenze usano un’identità diversa per ingresso: quit autenticato keepaliv
 pagehide, recupero della vecchia sessione al reload e filtro delle risposte tardive.
 D1 conserva per cinque minuti la revoca della sessione, impedendo a join tardivi
 di ricrearla. In caso di crash o rete assente resta il TTL di 120 secondi.
-Il protocollo WebRTC 3 registra anche i cambi di loadout nei frame sincronizzati
+Il protocollo WebRTC 4 registra anche i cambi di loadout nei frame sincronizzati
 e nella history. I preset sono locali e separati per i due profili.
 Il font TrueType è caricato con CSS @font-face sui browser, senza installazione
 di sistema; le icone PWA/Apple vengono convertite dal favicon.ico locale con Bun.

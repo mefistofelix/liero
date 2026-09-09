@@ -1,7 +1,7 @@
 import type {EngineModule} from './engine.ts';
 import type {RoomClient} from './rooms.ts';
 import {weaponPool,type Rules} from './preferences.ts';
-export const NETWORK_VERSION=3;
+export const NETWORK_VERSION=4;
 export type Input=[number,number,number];
 export type Frame=[number,number,number,number,number,number,number,(Rules|null)?,(number[][])?];
 export const rulesKey=(rules:Rules)=>JSON.stringify([rules.mode,rules.lives,rules.loading,rules.bonuses,weaponPool(rules.allowedWeapons).sort((a,b)=>a-b)]);

@@ -263,7 +263,9 @@ EMSCRIPTEN_KEEPALIVE void liero_begin_play(){
     if(!session)return;auto& g=session->game;g.browserAutoRespawn=true;
     for(int p=0;p<2;++p)if(participants&(1<<p)){
         auto& w=*g.worms[p];if(w.visible)continue;
-        w.ready=true;if(w.killedTimer==0)w.beginRespawn(g);
+        // Initial worms still have the original 150-tick countdown and position (0,0).
+        // Choose a valid spawn with the original algorithm before skipping the wait.
+        w.ready=true;w.beginRespawn(g);
         w.logicRespawn=ftoi(w.pos)-gvl::ivec2(80,80);w.doRespawning(g);
     }
 }

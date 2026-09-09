@@ -1,4 +1,4 @@
-import {el,input,click,form,notice,closeMenus,openMenu,onMenu} from './ui.ts';
+import {el,input,setDisabled,click,form,notice,closeMenus,openMenu,onMenu} from './ui.ts';
 import type {RoomClient,Room} from './rooms.ts';
 import type {EngineModule,LocalGame} from './engine.ts';
 import type {WeaponLibrary} from './weapons-ui.ts';
@@ -57,7 +57,7 @@ export class ArenaUI{
  }
  playButton(){
   const active=this.c.playing()&&this.c.seat()>=0,b=el<HTMLButtonElement>('join-play');
-  b.disabled=this.c.stopping()||(!active&&this.c.room.seat<0&&(this.c.room.room?.members.filter(m=>m.seat>=0).length||0)>=2);
+  setDisabled(b,this.c.stopping()||(!active&&this.c.room.seat<0&&(this.c.room.room?.members.filter(m=>m.seat>=0).length||0)>=2));
   const label=active?'Stop playing':'Join game';b.title=active?'Stop playing (suicide)':label;b.setAttribute('aria-label',label);
   b.querySelector('path')!.setAttribute('d',active?'M6 6h12v12H6Z':'m8 4 12 8-12 8Z');
  }
