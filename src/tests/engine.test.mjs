@@ -154,3 +154,10 @@ test('instant Play uses valid original Temple spawn positions instead of the uni
   for(let player=0;player<2;player++){if(!(mask&(1<<player)))continue;const base=ptr+24+player*4;expect(m.HEAP32[base+2]).toBe(1);expect(m.HEAP32[base]).toBeGreaterThan(5);expect(m.HEAP32[base]).toBeLessThan(499);expect(m.HEAP32[base+1]).toBeGreaterThan(5);expect(m.HEAP32[base+1]).toBeLessThan(345);}
  }
 });
+
+test('instant Play initializes spawns across all bundled levels and generated terrain',async()=>{
+ const catalog=await Bun.file(new URL('../browser/maps/catalog.json',import.meta.url)).json(),m=await fresh();
+ const check=name=>{m._liero_begin_play();m._liero_view(0,504,350);m._liero_camera(252,175);const ptr=m._liero_info()>>2;for(let player=0;player<2;player++){const base=ptr+24+player*4;expect(m.HEAP32[base+2],name).toBe(1);expect(m.HEAP32[base],name).toBeGreaterThan(0);expect(m.HEAP32[base],name).toBeLessThan(504);expect(m.HEAP32[base+1],name).toBeGreaterThan(0);expect(m.HEAP32[base+1],name).toBeLessThan(350);}};
+ for(const level of catalog){const data=new Uint8Array(await Bun.file(new URL('../browser'+level.asset,import.meta.url)).arrayBuffer());m.FS.writeFile('/import.lev',data);m._liero_options(0,99,20,0,1);m._liero_start(789,0);check(level.name);}
+ for(const seed of [1,123,789,0xffffffff]){m._liero_options(0,99,20,0,0);m._liero_start(seed,0);check('Generated '+seed);}
+},60000);
