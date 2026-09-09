@@ -23,6 +23,6 @@ export function readPreferences():Preferences{
  loadouts,
  rules:{mode:number(value.rules?.mode,0,3,0),lives:number(value.rules?.lives,1,99,15),loading:number(value.rules?.loading,1,1000,20),bonuses:number(value.rules?.bonuses,0,20,4),allowedWeapons:weaponPool(value.rules?.allowedWeapons)},
  controls:{mouse:bindings(value.controls?.mouse,defaultControls.mouse),keyboard:defaultControls.keyboard.map((keys,p)=>bindings(value.controls?.keyboard?.[p],keys))},
- rotation:Array.isArray(value.rotation)&&value.rotation.length&&value.rotation.length<=1000?value.rotation.filter((x:unknown)=>typeof x==='string'&&x.length<180):[...defaults.rotation]};
+ rotation:Array.isArray(value.rotation)&&value.rotation.length<=1000?value.rotation.filter((x:unknown)=>typeof x==='string'&&x.length<180):[...defaults.rotation]};
 }
 export function savePreferences(value:Preferences){localStorage.setItem('liero.preferences.v1',JSON.stringify({...value,defaultsVersion:2,loadoutDefaultsVersion:1,loadingDefaultsVersion:2}));}

@@ -95,3 +95,13 @@ test('quit removes membership immediately, fences late joins and cannot delete a
   await f.request('a','/rooms','DELETE');expect((await f.request('c',`/rooms/${id}/state`)).status).toBe(404);
  }finally{f.sql.close();}
 });
+
+
+test('a room accepts the complete bundled map rotation from Select all',async()=>{
+ const f=await fixture();try{
+  const catalog=await Bun.file(new URL('../browser/maps/catalog.json',import.meta.url)).json(),rotation=['random','temple',...catalog.map((level:any)=>level.id)];
+  const {id}=(await f.request('a','/rooms','POST',{name:'All maps',playerName:'Host',settings})).data;
+  const updated=await f.request('a','/rooms/'+id+'/settings','PUT',{name:'All maps',settings:{...settings,rotation}});
+  expect(updated.status).toBe(200);expect((await f.request('a','/rooms/'+id+'/state')).data.settings.rotation).toEqual(rotation);
+ }finally{f.sql.close();}
+});

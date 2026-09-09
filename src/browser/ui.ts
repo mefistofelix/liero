@@ -20,6 +20,6 @@ export function click(id:string,fn:()=>unknown){const target=el(id);target.addEv
 export function form(id:string,fn:()=>unknown){const target=el<HTMLFormElement>(id);target.addEventListener('submit',e=>{e.preventDefault();const submitter=e.submitter as HTMLButtonElement|null;const control=submitter||target.querySelector<HTMLButtonElement>('button[type=submit],button:not([type])')||target;void runAction(control,fn,target).catch(report);});}
 document.querySelectorAll<HTMLElement>('[data-open]').forEach(b=>b.onclick=()=>openMenu(b.dataset.open!));
 document.querySelectorAll<HTMLElement>('[data-close]').forEach(b=>b.onclick=backMenu);
-document.querySelectorAll<HTMLDialogElement>('dialog').forEach(d=>{d.addEventListener('cancel',event=>{event.preventDefault();backMenu();});d.addEventListener('close',()=>menuChange(!!document.querySelector('dialog[open]')));});
+document.querySelectorAll<HTMLDialogElement>('dialog').forEach(d=>{d.addEventListener('cancel',event=>{if(event.target!==d)return;event.preventDefault();backMenu();});d.addEventListener('close',()=>menuChange(!!document.querySelector('dialog[open]')));});
 document.addEventListener('pointerdown',event=>{const target=event.target as HTMLElement;if(!target.closest('dialog,.corner-tools')&&document.querySelector('dialog.dropdown[open]'))closeMenus();});
 window.addEventListener('keydown',event=>{if(event.code==='Escape'){const dropdown=document.querySelector<HTMLDialogElement>('dialog.dropdown[open]');if(dropdown){event.preventDefault();event.stopImmediatePropagation();backMenu();}}});

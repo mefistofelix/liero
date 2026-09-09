@@ -9,6 +9,7 @@ test('first-launch color persists and new factory defaults preserve custom choic
   stored=JSON.stringify({loadouts:[[1,8,15,22,29],[2,3,4,5,6]],rotation:['random','custom']});
   const migrated=readPreferences();expect(migrated.loadouts).toEqual([[19,25,9,36,35],[2,3,4,5,6]]);expect(migrated.rotation).toEqual(['random','custom']);
   migrated.loadouts[0]=[1,8,15,22,29];savePreferences(migrated);expect(readPreferences().loadouts[0]).toEqual([1,8,15,22,29]);
+  migrated.rotation=[];savePreferences(migrated);expect(readPreferences().rotation).toEqual([]);
  }finally{if(previous)Object.defineProperty(globalThis,'localStorage',previous);else delete (globalThis as any).localStorage;}
 });
 

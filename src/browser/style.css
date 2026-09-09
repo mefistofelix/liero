@@ -33,7 +33,7 @@ button,input,select,.icon-button,#hud{line-height:1}button,input,select{padding-
 button{display:inline-flex;align-items:center;justify-content:center}#spectate-label,#player-count{line-height:1}#maps-menu>.maps-controls{flex-shrink:0;padding:12px 22px 0;border-bottom:1px solid var(--line)}.maps-controls>.actions{margin:10px 0}.maps-controls>.small{margin-bottom:10px}.map-navigation{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.map-navigation p{margin:0}.map-navigation .pages{margin:0 0 10px;gap:8px}#maps-menu>.maps-scroll{padding-top:12px}.maps-controls .drop-zone{padding:10px;margin-bottom:8px}
 @media(max-height:600px){.maps-controls>.small{display:none}#maps-menu>.dialog-heading{padding:10px 16px}#maps-menu>.maps-controls{padding:8px 16px 0}.maps-controls .drop-zone{padding:6px}.maps-controls .drop-zone>span{display:none}}
 
-.player-table{table-layout:auto;width:100%;border-collapse:collapse}.player-table th,.player-table td{padding:5px 4px;font-size:16px;line-height:1.25;white-space:nowrap;text-align:right}.player-table th:first-child,.player-table td:first-child{text-align:left;width:100%}.player-table th{color:var(--muted);font-weight:normal}.player-identity{display:flex;align-items:center;gap:6px;min-width:0}.player-identity .member-name{overflow:hidden;text-overflow:ellipsis;max-width:180px}.player-identity .country-flag{margin:0}.player-table td small{display:block;color:var(--muted);font-size:14px;line-height:1.25}.player-table tbody tr:last-child td{border-bottom:0}
+.player-table{table-layout:auto;width:100%;border-collapse:collapse}.player-table th,.player-table td{padding:5px 4px;font-size:16px;line-height:1.25;white-space:nowrap;text-align:left}.player-table th:first-child,.player-table td:first-child{text-align:left;width:100%}.player-table th{color:var(--muted);font-weight:normal}.player-identity{display:flex;align-items:center;gap:6px;min-width:0}.player-identity .member-name{overflow:hidden;text-overflow:ellipsis;max-width:180px}.player-identity .country-flag{margin:0}.player-table td small{display:block;color:var(--muted);font-size:14px;line-height:1.25}.player-table tbody tr:last-child td{border-bottom:0}
 
 .loadout-slots .weapon-button.unavailable{opacity:.5;border-style:dashed}
 
@@ -43,9 +43,18 @@ button{display:inline-flex;align-items:center;justify-content:center}#spectate-l
 
 #create-panel .form-grid>.check{align-self:end;min-height:34px;margin:0}input[type=checkbox]{padding:0;margin:0;flex-shrink:0;vertical-align:middle}
 
-/* Preserve the button size and accessible name while its request is pending. */
-button[aria-busy=true]{position:relative;color:transparent!important;pointer-events:none;cursor:wait}
-button[aria-busy=true]>*{visibility:hidden}
-button[aria-busy=true]::after{content:'';position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border:2px solid #e5e7dd55;border-top-color:#e5e7dd;border-radius:50%;animation:button-loading .7s linear infinite}
+/* Keep labels and icons readable; append the spinner after the button content. */
+button[aria-busy=true]{opacity:1;pointer-events:none;cursor:wait}
+.right-tools .icon-button[aria-busy=true]:has(span){width:auto;flex-shrink:0}
+button[aria-busy=true]::after{content:'';display:block;flex:0 0 16px;width:16px;height:16px;margin-inline-start:8px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:button-loading .7s linear infinite}
 @keyframes button-loading{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){button[aria-busy=true]::after{animation:none;border-style:dotted}}
+
+.weapon-picker .weapon-button{flex-direction:row;justify-content:flex-start;text-align:left;min-height:44px;padding:5px 8px;gap:10px}.weapon-picker .weapon-button img{width:32px;height:32px;flex-shrink:0}.weapon-picker [draggable=true]{cursor:grab}.weapon-picker .dragging{opacity:.5}
+
+.icon-button[aria-busy=true]:not(:has(span)){position:relative}
+.icon-button[aria-busy=true]:not(:has(span))>svg{visibility:hidden}
+.icon-button[aria-busy=true]:not(:has(span))::after{position:absolute;left:50%;top:50%;margin:-8px 0 0 -8px}
+@media(max-width:700px){#spectate[aria-busy=true]{position:relative}#spectate[aria-busy=true]>svg{visibility:hidden}#spectate[aria-busy=true]::after{position:absolute;left:50%;top:50%;margin:-8px 0 0 -8px}}
+
+#rooms-menu th,#rooms-menu td{text-align:left}#rooms-menu th button{justify-content:flex-start}

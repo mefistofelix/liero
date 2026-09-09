@@ -191,7 +191,8 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
   scope poll and peer callbacks to the entry epoch. Rejoining the same room is a no-op.
   Unexpected crashes/offline quits still rely on the 120-second membership expiry.
 - Named loadout presets are saved separately for each local player. Selecting, editing
-  or dragging slots applies immediately; Alt+Left/Right also reorders slots. Online
+  or dragging slots applies immediately; the compact weapon list also supports dragging weapons into slots.
+  The Weapons menu uses the profile that opened it, with one named Loadout selector; Alt+Left/Right also reorders slots. Online
   changes are host-committed with frame history (protocol 4). Retain ammunition and
   reload progress of kept weapons; newly added weapons start their normal reload.
 - Split screen shows a second profile toolbar button; player 1 remains the online
@@ -202,7 +203,10 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
   still explicitly release it. Help sits immediately before the sound button.
 - Derive PWA and Apple icons from the bundled favicon with the Bun assets:icons task.
 
-- Asynchronous button/form actions show an in-button spinner and disable the trigger
+- Maps offers Select all / Deselect all across the entire library, regardless of page or filter.
+  Empty selection is a local draft; keep the last valid room rotation until a map is selected.
+  Cancelling the native file picker must leave the Maps dialog open.
+- Asynchronous button/form actions keep text/icons at full opacity, append a spinner at the end (replace the icon for icon-only buttons), and disable the trigger
   until settlement, preventing repeated submissions. Restore it after success/error;
   retain disabled conditions updated by room state while an action was pending.
 
