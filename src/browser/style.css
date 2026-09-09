@@ -58,3 +58,5 @@ button[aria-busy=true]::after{content:'';display:block;flex:0 0 16px;width:16px;
 @media(max-width:700px){#spectate[aria-busy=true]{position:relative}#spectate[aria-busy=true]>svg{visibility:hidden}#spectate[aria-busy=true]::after{position:absolute;left:50%;top:50%;margin:-8px 0 0 -8px}}
 
 #rooms-menu th,#rooms-menu td{text-align:left}#rooms-menu th button{justify-content:flex-start}
+
+#chat-feed a,#chat-history a{pointer-events:auto;text-decoration:underline;overflow-wrap:anywhere}

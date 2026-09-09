@@ -1,3 +1,4 @@
+import {chatText} from './chat-text.ts';
 import {el,input,setDisabled,click,form,notice,closeMenus,openMenu,onMenu} from './ui.ts';
 import type {RoomClient,Room} from './rooms.ts';
 import type {EngineModule,LocalGame} from './engine.ts';
@@ -40,7 +41,7 @@ export class ArenaUI{
  }
  private unlockChatAudio(){if(!this.c.sound())return;try{this.chatAudio??=new AudioContext();if(this.chatAudio.state==='suspended')void this.chatAudio.resume();}catch{}}
  private beep(){if(!this.c.sound())return;this.unlockChatAudio();const ctx=this.chatAudio;if(!ctx||ctx.state!=='running')return;const tone=ctx.createOscillator(),gain=ctx.createGain(),now=ctx.currentTime;tone.type='square';tone.frequency.setValueAtTime(880,now);gain.gain.setValueAtTime(.035,now);gain.gain.exponentialRampToValueAtTime(.001,now+.065);tone.connect(gain);gain.connect(ctx.destination);tone.start(now);tone.stop(now+.07);tone.onended=()=>{tone.disconnect();gain.disconnect();};}
- private chatLine(name:string,text:string){const line=document.createElement('p'),label=document.createElement('strong');label.textContent=name;line.append(label,document.createTextNode(text));el('chat-feed').append(line);this.trimChat();return line;}
+ private chatLine(name:string,text:string){const line=document.createElement('p'),label=document.createElement('strong');label.textContent=name;line.append(label,chatText(text));el('chat-feed').append(line);this.trimChat();return line;}
  private trimChat(){const feed=el('chat-feed'),messages=[...feed.children].filter(line=>!line.classList.contains('chat-exit'));for(const line of messages.slice(0,Math.max(0,messages.length-8))){line.classList.add('chat-exit');setTimeout(()=>line.remove(),500);}feed.scrollTop=feed.scrollHeight;}
  receiveChat(msg:Room['chat'][number],sound=true){
   if(!msg||!Number.isSafeInteger(msg.seq)||msg.seq<1||typeof msg.player!=='string'||typeof msg.name!=='string'||typeof msg.message!=='string'||msg.message.length>500)return;
