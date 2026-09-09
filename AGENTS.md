@@ -116,6 +116,8 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   Upgrade the former factory loadout while preserving customized choices.
 - Recordings has its own right-toolbar icon and works during live spectating.
   While capturing, show a red recording dot on that icon even with the panel closed.
+  The recordings panel has one Record button that becomes Stop and save during
+  capture. Disable it while finalizing the MP4; restore Record after completion.
   Audio is controlled only by the toolbar toggle. Neither belongs in Profile.
 - Popup close/Escape returns to the previous menu when opened from that menu
   (e.g. Profile -> Weapons -> close -> Profile), retaining prior tab/form state.

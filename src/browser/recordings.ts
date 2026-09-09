@@ -11,6 +11,7 @@ export class GameRecorder{
  private recorder?:MediaRecorder;private chunks:Blob[]=[];private startTime=0;private raf=0;private videoStream?:MediaStream;private name='';private bytes=0;
  onRecordingChange=(recording:boolean)=>{};onSaved=(recording:Recording,persisted:boolean)=>{};onError=(error:Error)=>{};
  get active(){return this.recorder?.state==='recording'||this.finalizing;}
+ get saving(){return this.finalizing;}
  supported(){return typeof MediaRecorder!=='undefined'&&['video/mp4;codecs=avc1.42001E,mp4a.40.2','video/mp4'].some(t=>MediaRecorder.isTypeSupported(t));}
  start(game:HTMLCanvasElement,audio:MediaStream|undefined,name:string){
   if(this.active)return;
@@ -23,10 +24,11 @@ export class GameRecorder{
   this.recorder=new MediaRecorder(new MediaStream(tracks),{mimeType,videoBitsPerSecond:4_000_000,audioBitsPerSecond:128_000});this.chunks=[];this.bytes=0;this.startTime=Date.now();this.name=name;
   this.recorder.ondataavailable=e=>{if(e.data.size){this.chunks.push(e.data);this.bytes+=e.data.size;if(this.bytes>256*1024*1024)this.stop();}};
   this.recorder.onerror=()=>{this.onError(new Error('Recording failed.'));this.stop();};
-  this.completion=new Promise<void>(resolve=>{this.finish=()=>{this.finalizing=false;resolve();};});
+  this.completion=new Promise<void>(resolve=>{this.finish=()=>{this.finalizing=false;this.onRecordingChange(false);resolve();};});
   this.recorder.onstop=async()=>{
+   this.finalizing=true;
    this.onRecordingChange(false);
-   this.finalizing=true;try{
+   try{
    cancelAnimationFrame(this.raf);this.videoStream?.getTracks().forEach(t=>t.stop());
    const recording={id:crypto.randomUUID(),name:this.name,date:this.startTime,duration:Date.now()-this.startTime,blob:new Blob(this.chunks,{type:'video/mp4'})};this.chunks=[];
    if(!recording.blob.size){this.onError(new Error('The browser did not produce a recording.'));return;}
