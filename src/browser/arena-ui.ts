@@ -1,3 +1,4 @@
+import {orderPlayers,playerStatus} from './player-list.ts';
 import {chatText} from './chat-text.ts';
 import {el,input,setDisabled,click,form,notice,closeMenus,openMenu,onMenu} from './ui.ts';
 import type {RoomClient,Room} from './rooms.ts';
@@ -6,7 +7,7 @@ import type {WeaponLibrary} from './weapons-ui.ts';
 import {countryFlag} from './flags.ts';
 type Context={room:RoomClient;game:()=>LocalGame;engine:()=>EngineModule;weapons:()=>WeaponLibrary;names:()=>string[];playing:()=>boolean;stopping:()=>boolean;color:()=>string;color2:()=>string;seat:()=>number;sound:()=>boolean;setSound:(v:boolean)=>void;join:()=>Promise<void>;spectate:()=>Promise<void>;copy:()=>Promise<void>};
 export class ArenaUI{
- private lastWeapon=[-1,-1];private weaponUntil=[0,0];private shown=true;private camera:number|'free'='free';private chatSeq=0;private roomId='';private state=new Int32Array(52);private lastPanel=0;private deathSeq=[0,0];private cycle=-1;private chatSeen=new Set<string>();private pendingChat:{text:string;line:HTMLElement}[]=[];private chatAudio?:AudioContext;
+ private lastWeapon=[-1,-1];private weaponUntil=[0,0];private shown=true;private camera:number|'free'='free';private chatSeq=0;private roomId='';private state=new Int32Array(52);private lastPanel=0;private deathSeq=[0,0];private cycle=-1;private chatSeen=new Set<string>();private memberIds=new Set<string>();private pendingChat:{text:string;line:HTMLElement}[]=[];private chatAudio?:AudioContext;
  constructor(private c:Context){
   for(let p=0;p<2;p++){const label=el('worm-label-'+p),name=document.createElement('span');name.id='worm-name-'+p;name.className='worm-name';const weapon=document.createElement('span');weapon.id='worm-weapon-'+p;weapon.className='own-weapon';weapon.hidden=true;label.append(weapon,name);for(const kind of ['health','reload']){const bar=document.createElement('span'),fill=document.createElement('i');bar.className='worm-bar worm-'+kind;fill.id='worm-'+kind+'-'+p;bar.append(fill);label.append(bar);}}
   click('players-toggle',()=>{this.shown=!this.shown;el('player-panel').hidden=!this.shown;el('players-toggle').setAttribute('aria-expanded',String(this.shown));});
@@ -26,13 +27,15 @@ export class ArenaUI{
  reset(){this.lastWeapon=[-1,-1];this.weaponUntil=[0,0];this.deathSeq=[0,0];this.cycle=-1;for(const p of [0,1])el('worm-label-'+p).hidden=true;}
  room(r:Room,ping:(id:string)=>number|undefined){
   const newRoom=this.roomId!==r.id;if(newRoom){this.roomId=r.id;this.chatSeq=0;this.chatSeen.clear();this.pendingChat=[];el('chat-feed').replaceChildren();el('kill-feed').replaceChildren();this.reset();this.camera='free';}
+  if(!newRoom&&r.id!=='local'&&r.members.some(member=>!this.memberIds.has(member.id)))this.beep();
+  this.memberIds=new Set(r.members.map(member=>member.id));
   for(const msg of r.chat)this.receiveChat(msg,!newRoom);
-  const list=el('overlay-players');list.replaceChildren();const members=[...r.members].sort((a,b)=>(a.seat<0?3:a.seat)-(b.seat<0?3:b.seat));
+  const list=el('overlay-players');list.replaceChildren();const members=orderPlayers(r.members,seat=>this.c.playing()?this.state[16+seat]||0:0);
   for(const m of members){
    const row=document.createElement('tr'),cell=document.createElement('td'),identity=document.createElement('div');identity.className='player-identity';
    const dot=document.createElement('span');dot.className='worm-dot';dot.style.background=m.color;
    const name=document.createElement('span');name.className='member-name';name.textContent=m.name+(m.id===r.self?' (you)':'');if(m.id===r.owner)name.title='Room host';
-   identity.append(countryFlag(m.country),dot,name);cell.append(identity);if(m.seat<0){const status=document.createElement('small');status.textContent='Spectating';cell.append(status);}row.append(cell);
+   identity.append(countryFlag(m.country),dot,name);cell.append(identity);row.append(cell,playerStatus(m.seat>=0));
    const ms=ping(m.id),active=m.seat>=0&&this.c.playing();
    for(const value of [active?this.state[16+m.seat]:'—',active?this.state[44+m.seat]||0:'—',ms===undefined?'—':ms+' ms']){const td=document.createElement('td');td.textContent=String(value);row.append(td);}list.append(row);
   }

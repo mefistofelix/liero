@@ -126,8 +126,8 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   Default room weapon loading time is 20%.
 - Latest correction: room listings have ONE Players column showing total room
   members/capacity, e.g. 3/16, including spectators. Do not show the two-seat ratio.
-  Player overlays use a table with Player, Kills, Deaths and Ping headers; rows
-  contain values without repeating labels. Spectating appears under the player name.
+  Player overlays use a table with Player, a compact icon-only Playing/Spectating status column, Kills, Deaths and Ping headers; rows
+  contain values without repeating labels. Keep players ordered by kills descending and spectators at the bottom, with no second status line under names.
   Leaderboards show Kills and Deaths. Deaths count death callbacks, not lost lives.
 - Player list starts open, includes spectators, measured host RTT, kills/deaths for players.
   Hiding it preserves the member count beside the toolbar icon.
