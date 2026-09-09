@@ -1,3 +1,4 @@
+import {playerName} from './player-name.ts';
 import {chatText} from './chat-text.ts';
 import {loadEngine,LocalGame,type EngineModule} from './engine.ts';
 import {readPreferences,savePreferences,weaponPool,type Rules} from './preferences.ts';
@@ -54,14 +55,14 @@ async function sendProfile(){
  catch(error){profileDirty=true;report(error);}finally{profileSaving=false;}
 }
 function updateProfile(){
- const value=profilePlayer===0?prefs:prefs.player2,name=input('player-name').value.trim();if(name)value.name=name;value.color=input('player-color').value;save();
+ const value=profilePlayer===0?prefs:prefs.player2,name=playerName(input('player-name').value,'');if(name)value.name=name;value.color=input('player-color').value;save();
  if(room.id&&profilePlayer===0){const member=room.room?.members.find(m=>m.id===room.room?.self);if(member){member.name=value.name;member.color=value.color;if(member.seat>=0)setAppearance(member.seat,value.name,value.color);}profileDirty=true;}
  else if(!room.id)setAppearance(profilePlayer,value.name,value.color);
 }
 onMenuClose('profile-menu',()=>{updateProfile();void sendProfile();});
 form('profile-form',()=>{updateProfile();return sendProfile();});
 function setAppearance(p:number,name:string,color:string){
- playerNames[p]=name;module?._liero_color(p,parseInt(color.slice(1,3),16)>>2,parseInt(color.slice(3,5),16)>>2,parseInt(color.slice(5,7),16)>>2);
+ playerNames[p]=playerName(name);module?._liero_color(p,parseInt(color.slice(1,3),16)>>2,parseInt(color.slice(3,5),16)>>2,parseInt(color.slice(5,7),16)>>2);
  game?.refreshAppearance();
 }
 async function togglePlay(){
@@ -119,8 +120,8 @@ async function saveRoomSettings(){if(room.host){await room.call('settings','PUT'
 function pingFor(id:string){if(id===room.room?.owner)return 0;return room.host?room.pings.get(id):peerPings[id];}
 function renderRoom(r:Room){
  if(!r)return;if(room.host&&round&&!round.ended&&rulesKey(r.settings)!==lastRulesKey){round.queueRules(r.settings);lastRulesKey=rulesKey(r.settings);}for(const m of r.members)if(m.seat>=0){setAppearance(m.seat,m.name,m.color);if(setup?.playerIds?.[m.seat]===m.id){setup.players[m.seat]=m.name;setup.colors[m.seat]=m.color;}}maps?.setRoom(room.host?undefined:r.settings.rotation);weapons?.setAvailability(weaponPool(r.settings.allowedWeapons));arena.room(r,pingFor);el('room-description').replaceChildren(countryFlag(r.country),document.createTextNode(' '+(r.private?'Private':'Public')+' · '+r.count+'/'+r.capacity));
- const members=el('members');members.replaceChildren();for(const m of r.members){const row=document.createElement('div');row.className='member';const dot=document.createElement('span');dot.className='worm-dot';dot.style.background=m.color;const name=document.createElement('span');name.className='member-name';name.textContent=m.name+(m.id===r.self?' (you)':'');const role=document.createElement('span');role.className='role';role.textContent=m.seat>=0?'Player '+(m.seat+1)+(m.id===r.owner?' / host':''):'Spectator'+(m.id===r.owner?' / host':'');const ping=document.createElement('span');ping.className='ping';const ms=pingFor(m.id);ping.textContent=ms===undefined?'—':ms+' ms';row.append(countryFlag(m.country),dot,name,role,ping);members.append(row);}
- const log=el('chat-history'),last=log.dataset.last||'';const next=String(r.chat.at(-1)?.seq||'');if(last!==next){const bottom=log.scrollHeight-log.scrollTop-log.clientHeight<35;log.replaceChildren();for(const msg of r.chat){const p=document.createElement('p'),name=document.createElement('strong');name.textContent=msg.name;p.append(name,chatText(msg.message));log.append(p);}log.dataset.last=next;if(bottom)log.scrollTop=log.scrollHeight;}
+ const members=el('members');members.replaceChildren();for(const m of r.members){const row=document.createElement('div');row.className='member';const dot=document.createElement('span');dot.className='worm-dot';dot.style.background=m.color;const name=document.createElement('span');name.className='member-name';name.textContent=playerName(m.name)+(m.id===r.self?' (you)':'');const role=document.createElement('span');role.className='role';role.textContent=m.seat>=0?'Player '+(m.seat+1)+(m.id===r.owner?' / host':''):'Spectator'+(m.id===r.owner?' / host':'');const ping=document.createElement('span');ping.className='ping';const ms=pingFor(m.id);ping.textContent=ms===undefined?'—':ms+' ms';row.append(countryFlag(m.country),dot,name,role,ping);members.append(row);}
+ const log=el('chat-history'),last=log.dataset.last||'';const next=String(r.chat.at(-1)?.seq||'');if(last!==next){const bottom=log.scrollHeight-log.scrollTop-log.clientHeight<35;log.replaceChildren();for(const msg of r.chat){const p=document.createElement('p'),name=document.createElement('strong');name.textContent=playerName(msg.name);p.append(name,chatText(msg.message));log.append(p);}log.dataset.last=next;if(bottom)log.scrollTop=log.scrollHeight;}
  el<HTMLButtonElement>('start-round').hidden=!room.host;const players=r.members.filter(m=>m.seat>=0),ready=players.length>0&&players.every(m=>m.id===r.self||peerLoadouts.has(m.id));setDisabled(el<HTMLButtonElement>('start-round'),!ready||!!round&&!round.ended);
  el<HTMLButtonElement>('take-seat').hidden=false;setDisabled(el<HTMLButtonElement>('take-seat'),room.seat<0&&players.length>=2);el('take-seat').textContent=room.seat<0?'Join game':'Switch to spectator';
  el('round-status').textContent=r.phase==='playing'?'Round in progress. Spectators can follow either player or use free camera.':ready?'Starting the game…':'Press Play to start, even on your own.';
@@ -144,7 +145,7 @@ function sendSetup(id:string){
  room.send(id,{type:'start',round:setup.id});round?.history(id);
 }
 function launchNetwork(value:any,data:Uint8Array|null){
- applyRules(value.rules,value.loadouts,value.colors,data);lastRulesKey=rulesKey(value.rules);setup=value;mapData=data;localTwo=false;follow=room.seat===1?1:0;playerNames=value.players;el('map-name').textContent=value.map.name;
+ applyRules(value.rules,value.loadouts,value.colors,data);lastRulesKey=rulesKey(value.rules);setup=value;mapData=data;localTwo=false;follow=room.seat===1?1:0;playerNames=[0,1].map(p=>playerName(value.players?.[p],''));setup.players=[...playerNames];el('map-name').textContent=value.map.name;
  if(round)round.ended=true;
  if(value.preview){round=undefined;playing=false;arena.reset();game.preview(value.seed);el('hud').hidden=true;el('spectator-tools').hidden=true;arena.nextCamera(true);return;}
  round=new NetworkRound(module,room,value.id,room.seat,value.participants??3);round.onError=message=>{game.stop();playing=false;notice(message);openMenu('rooms-menu');};round.onEnd=()=>{if(room.host){room.call('phase','PUT',{phase:'lobby'}).catch(report);roomTimeoutNext();}};

@@ -214,3 +214,9 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
   visible; initial worms have a 150-tick countdown and uninitialized (0,0) position.
   Do not reset/save room rules before each round. Start the prepared simulation before
   awaiting its directory phase update; notify the host immediately of seat changes.
+
+- Player names are limited to 20 characters at server writes and browser display boundaries,
+  including untrusted WebRTC names. Strip invisible direction/control characters on display,
+  constrain names with ellipsis, and size the player table to its content. K/D headers stay compact.
+- Beep for new room members (including spectators), respecting mute. Do not beep for
+  the initial member snapshot or repeated polls; a later re-entry is a new join.

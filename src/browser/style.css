@@ -33,7 +33,7 @@ button,input,select,.icon-button,#hud{line-height:1}button,input,select{padding-
 button{display:inline-flex;align-items:center;justify-content:center}#spectate-label,#player-count{line-height:1}#maps-menu>.maps-controls{flex-shrink:0;padding:12px 22px 0;border-bottom:1px solid var(--line)}.maps-controls>.actions{margin:10px 0}.maps-controls>.small{margin-bottom:10px}.map-navigation{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.map-navigation p{margin:0}.map-navigation .pages{margin:0 0 10px;gap:8px}#maps-menu>.maps-scroll{padding-top:12px}.maps-controls .drop-zone{padding:10px;margin-bottom:8px}
 @media(max-height:600px){.maps-controls>.small{display:none}#maps-menu>.dialog-heading{padding:10px 16px}#maps-menu>.maps-controls{padding:8px 16px 0}.maps-controls .drop-zone{padding:6px}.maps-controls .drop-zone>span{display:none}}
 
-.player-table{table-layout:auto;width:100%;border-collapse:collapse}.player-table th,.player-table td{padding:5px 4px;font-size:16px;line-height:1.25;white-space:nowrap;text-align:left}.player-table th:first-child,.player-table td:first-child{text-align:left;width:100%}.player-table th{color:var(--muted);font-weight:normal}.player-identity{display:flex;align-items:center;gap:6px;min-width:0}.player-identity .member-name{overflow:hidden;text-overflow:ellipsis;max-width:180px}.player-identity .country-flag{margin:0}.player-table td small{display:block;color:var(--muted);font-size:14px;line-height:1.25}.player-table tbody tr:last-child td{border-bottom:0}
+.player-table{table-layout:auto;width:auto;border-collapse:collapse}.player-table th,.player-table td{padding:5px 4px;font-size:16px;line-height:1.25;white-space:nowrap;text-align:left}.player-table th:first-child,.player-table td:first-child{text-align:left;width:auto}.player-table th{color:var(--muted);font-weight:normal}.player-identity{display:flex;align-items:center;gap:6px;min-width:0}.player-identity .member-name{overflow:hidden;text-overflow:ellipsis;max-width:180px}.player-identity .country-flag{margin:0}.player-table td small{display:block;color:var(--muted);font-size:14px;line-height:1.25}.player-table tbody tr:last-child td{border-bottom:0}
 
 .loadout-slots .weapon-button.unavailable{opacity:.5;border-style:dashed}
 
@@ -62,3 +62,7 @@ button[aria-busy=true]::after{content:'';display:block;flex:0 0 16px;width:16px;
 #chat-feed a,#chat-history a{pointer-events:auto;text-decoration:underline;overflow-wrap:anywhere}
 
 .player-table .player-status{width:24px;min-width:24px;padding-inline:3px;pointer-events:auto}.player-status svg{display:block;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+#player-panel{width:fit-content;max-width:100%;margin-left:auto;overflow-x:auto}.member-name{min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#chat-feed strong,#chat-history strong{display:inline-block;max-width:20ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}#worm-labels .worm-name{max-width:min(20ch,35vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.kill-entry{max-width:100%}.kill-name{min-width:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+#overlay-players .member-name{max-width:180px}

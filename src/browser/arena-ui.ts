@@ -1,3 +1,4 @@
+import {playerName} from './player-name.ts';
 import {orderPlayers,playerStatus} from './player-list.ts';
 import {chatText} from './chat-text.ts';
 import {el,input,setDisabled,click,form,notice,closeMenus,openMenu,onMenu} from './ui.ts';
@@ -34,7 +35,7 @@ export class ArenaUI{
   for(const m of members){
    const row=document.createElement('tr'),cell=document.createElement('td'),identity=document.createElement('div');identity.className='player-identity';
    const dot=document.createElement('span');dot.className='worm-dot';dot.style.background=m.color;
-   const name=document.createElement('span');name.className='member-name';name.textContent=m.name+(m.id===r.self?' (you)':'');if(m.id===r.owner)name.title='Room host';
+   const name=document.createElement('span');name.className='member-name';name.textContent=playerName(m.name)+(m.id===r.self?' (you)':'');if(m.id===r.owner)name.title='Room host';
    identity.append(countryFlag(m.country),dot,name);cell.append(identity);row.append(cell,playerStatus(m.seat>=0));
    const ms=ping(m.id),active=m.seat>=0&&this.c.playing();
    for(const value of [active?this.state[16+m.seat]:'—',active?this.state[44+m.seat]||0:'—',ms===undefined?'—':ms+' ms']){const td=document.createElement('td');td.textContent=String(value);row.append(td);}list.append(row);
@@ -44,7 +45,7 @@ export class ArenaUI{
  }
  private unlockChatAudio(){if(!this.c.sound())return;try{this.chatAudio??=new AudioContext();if(this.chatAudio.state==='suspended')void this.chatAudio.resume();}catch{}}
  private beep(){if(!this.c.sound())return;this.unlockChatAudio();const ctx=this.chatAudio;if(!ctx||ctx.state!=='running')return;const tone=ctx.createOscillator(),gain=ctx.createGain(),now=ctx.currentTime;tone.type='square';tone.frequency.setValueAtTime(880,now);gain.gain.setValueAtTime(.035,now);gain.gain.exponentialRampToValueAtTime(.001,now+.065);tone.connect(gain);gain.connect(ctx.destination);tone.start(now);tone.stop(now+.07);tone.onended=()=>{tone.disconnect();gain.disconnect();};}
- private chatLine(name:string,text:string){const line=document.createElement('p'),label=document.createElement('strong');label.textContent=name;line.append(label,chatText(text));el('chat-feed').append(line);this.trimChat();return line;}
+ private chatLine(name:string,text:string){const line=document.createElement('p'),label=document.createElement('strong');label.textContent=playerName(name);line.append(label,chatText(text));el('chat-feed').append(line);this.trimChat();return line;}
  private trimChat(){const feed=el('chat-feed'),messages=[...feed.children].filter(line=>!line.classList.contains('chat-exit'));for(const line of messages.slice(0,Math.max(0,messages.length-8))){line.classList.add('chat-exit');setTimeout(()=>line.remove(),500);}feed.scrollTop=feed.scrollHeight;}
  receiveChat(msg:Room['chat'][number],sound=true){
   if(!msg||!Number.isSafeInteger(msg.seq)||msg.seq<1||typeof msg.player!=='string'||typeof msg.name!=='string'||typeof msg.message!=='string'||msg.message.length>500)return;
@@ -80,7 +81,7 @@ export class ArenaUI{
    const health=Math.max(0,Math.min(1,state[2+p*5]/Math.max(1,state[46+p*3]))),reload=Math.max(0,Math.min(1,1-state[47+p*3]/Math.max(1,state[48+p*3])));
    el('worm-health-'+p).style.transform=`scaleX(${health})`;el('worm-reload-'+p).style.transform=`scaleX(${reload})`;
    label.style.left=rect.left-stage.left+x*rect.width/canvas.width+'px';label.style.top=rect.top-stage.top+(y-9)*rect.height/canvas.height+'px';
-   const at=32+p*4,seq=state[at];if(seq>this.deathSeq[p]){this.deathSeq[p]=seq;if(state[0]-state[at+3]>140)continue;const killer=state[at+1],weapon=c.weapons()?.get(c.engine()._liero_weapon_id(state[at+2]));const entry=document.createElement('div');entry.className='kill-entry fade-message';const name=document.createElement('span');name.textContent=c.names()[killer]||'Environment';const gun=document.createElement('span');gun.className='kill-weapon';gun.textContent=weapon?.name||'—';const victim=document.createElement('span');victim.textContent=c.names()[p];if(killer!==p&&killer>=0)entry.append(name);else entry.setAttribute('aria-label',c.names()[p]+' committed suicide');if(weapon){const icon=document.createElement('img');icon.src=weapon.icon;icon.alt='';entry.append(icon);}entry.append(gun,victim);el('kill-feed').append(entry);setTimeout(()=>entry.remove(),9000);}
+   const at=32+p*4,seq=state[at];if(seq>this.deathSeq[p]){this.deathSeq[p]=seq;if(state[0]-state[at+3]>140)continue;const killer=state[at+1],weapon=c.weapons()?.get(c.engine()._liero_weapon_id(state[at+2]));const entry=document.createElement('div');entry.className='kill-entry fade-message';const name=document.createElement('span');name.className='kill-name';name.textContent=playerName(c.names()[killer],'Environment');const gun=document.createElement('span');gun.className='kill-weapon';gun.textContent=weapon?.name||'—';const victim=document.createElement('span');victim.className='kill-name';victim.textContent=playerName(c.names()[p]);if(killer!==p&&killer>=0)entry.append(name);else entry.setAttribute('aria-label',c.names()[p]+' committed suicide');if(weapon){const icon=document.createElement('img');icon.src=weapon.icon;icon.alt='';entry.append(icon);}entry.append(gun,victim);el('kill-feed').append(entry);setTimeout(()=>entry.remove(),9000);}
   }
  }
 }

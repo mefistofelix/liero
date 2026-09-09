@@ -105,3 +105,15 @@ test('a room accepts the complete bundled map rotation from Select all',async()=
   expect(updated.status).toBe(200);expect((await f.request('a','/rooms/'+id+'/state')).data.settings.rotation).toEqual(rotation);
  }finally{f.sql.close();}
 });
+
+
+test('all player-name write endpoints reject names longer than 20 characters',async()=>{
+ const f=await fixture();try{
+  const name='W'.repeat(21);
+  expect((await f.request('a','/rooms','POST',{name:'Room',playerName:name,settings})).status).toBe(400);
+  const {id}=(await f.request('a','/rooms','POST',{name:'Room',playerName:'Host',settings})).data;
+  expect((await f.request('b','/rooms/'+id+'/join','POST',{name})).status).toBe(400);
+  expect((await f.request('a','/rooms/'+id+'/profile','PUT',{name,color:'#123456'})).status).toBe(400);
+  expect((await f.request('a','/rooms/'+id+'/state')).data.members.map((m:any)=>m.name)).toEqual(['Host']);
+ }finally{f.sql.close();}
+});

@@ -1,3 +1,4 @@
+import {playerName} from './player-name.ts';
 export const allWeapons=Array.from({length:40},(_,i)=>i+1);
 export const weaponPool=(value:unknown):number[]=>Array.isArray(value)&&value.length&&value.every(id=>Number.isInteger(id)&&id>=1&&id<=40)?[...new Set<number>(value)]:[...allWeapons];
 export type Rules={mode:number;lives:number;loading:number;bonuses:number;allowedWeapons?:number[]};
@@ -19,7 +20,7 @@ export function readPreferences():Preferences{
  const loadouts=[0,1].map(p=>[0,1,2,3,4].map(s=>number(value.loadouts?.[p]?.[s],1,40,defaults.loadouts[p][s])));
  const savedLoadouts=[0,1].map(p=>{const lists=value.savedLoadouts?.[p];const valid=Array.isArray(lists)?lists.filter((v:any)=>typeof v?.id==='string'&&v.id.length<=64&&typeof v.name==='string'&&v.name.trim()&&Array.isArray(v.weapons)&&v.weapons.length===5&&v.weapons.every((id:any)=>Number.isInteger(id)&&id>=1&&id<=40)).slice(0,32).map((v:any)=>({id:v.id,name:v.name.trim().slice(0,32),weapons:[...v.weapons]})):[];return valid.length?valid:[{id:'default',name:'Default',weapons:[...loadouts[p]]}];});
  const selectedLoadouts=[0,1].map(p=>savedLoadouts[p].some(v=>v.id===value.selectedLoadouts?.[p])?value.selectedLoadouts[p]:savedLoadouts[p][0].id);
- return {player2:{name:text(value.player2?.name,'Player 2',20),color:/^#[a-f0-9]{6}$/i.test(value.player2?.color)?value.player2.color:'#3cac3c'},savedLoadouts,selectedLoadouts,name:text(value.name,defaults.name,20),color:/^#[a-f0-9]{6}$/i.test(value.color)?value.color:defaults.color,roomName:text(value.roomName,defaults.roomName,48),privateRoom:value.privateRoom===true,sound:value.sound!==false,keyboardOnly:value.keyboardOnly!==false,
+ return {player2:{name:playerName(value.player2?.name,'Player 2'),color:/^#[a-f0-9]{6}$/i.test(value.player2?.color)?value.player2.color:'#3cac3c'},savedLoadouts,selectedLoadouts,name:playerName(value.name,defaults.name),color:/^#[a-f0-9]{6}$/i.test(value.color)?value.color:defaults.color,roomName:text(value.roomName,defaults.roomName,48),privateRoom:value.privateRoom===true,sound:value.sound!==false,keyboardOnly:value.keyboardOnly!==false,
  loadouts,
  rules:{mode:number(value.rules?.mode,0,3,0),lives:number(value.rules?.lives,1,99,15),loading:number(value.rules?.loading,1,1000,20),bonuses:number(value.rules?.bonuses,0,20,4),allowedWeapons:weaponPool(value.rules?.allowedWeapons)},
  controls:{mouse:bindings(value.controls?.mouse,defaultControls.mouse),keyboard:defaultControls.keyboard.map((keys,p)=>bindings(value.controls?.keyboard?.[p],keys))},
