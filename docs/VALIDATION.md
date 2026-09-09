@@ -1,5 +1,15 @@
 # Local milestone validation — 2026-09-09
 
+## Room presence in chat
+
+Checked a private local room through two browser tabs: the host saw one system
+message when a spectator joined and one when that member left through Local
+play. Initial rosters stayed silent in both clients. Repeated room polls and
+claiming a player seat did not add notices. The system messages use the existing
+eight-line chat retention and fade path. The production bundle builds successfully.
+These are live roster changes, not persisted chat history; unexpected disconnects
+are reported when the room's existing membership timeout removes the member.
+
 ## Player-list spectating
 
 Checked locally through the normal UI with two playing tabs and a third WebRTC

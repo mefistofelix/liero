@@ -8,7 +8,7 @@ import type {WeaponLibrary} from './weapons-ui.ts';
 import {countryFlag} from './flags.ts';
 type Context={room:RoomClient;game:()=>LocalGame;engine:()=>EngineModule;weapons:()=>WeaponLibrary;names:()=>string[];playing:()=>boolean;stopping:()=>boolean;color:()=>string;color2:()=>string;seat:()=>number;sound:()=>boolean;setSound:(v:boolean)=>void;join:()=>Promise<void>;spectate:()=>Promise<void>;copy:()=>Promise<void>};
 export class ArenaUI{
- private lastWeapon=[-1,-1];private weaponUntil=[0,0];private shown=true;private camera:number|'free'='free';private chatSeq=0;private roomId='';private state=new Int32Array(52);private lastPanel=0;private deathSeq=[0,0];private cycle=-1;private chatSeen=new Set<string>();private memberIds=new Set<string>();private pendingChat:{text:string;line:HTMLElement}[]=[];private chatAudio?:AudioContext;
+ private lastWeapon=[-1,-1];private weaponUntil=[0,0];private shown=true;private camera:number|'free'='free';private chatSeq=0;private roomId='';private roomSelf='';private state=new Int32Array(52);private lastPanel=0;private deathSeq=[0,0];private cycle=-1;private chatSeen=new Set<string>();private memberNames=new Map<string,string>();private pendingChat:{text:string;line:HTMLElement}[]=[];private chatAudio?:AudioContext;
  constructor(private c:Context){
   for(let p=0;p<2;p++){const label=el('worm-label-'+p),name=document.createElement('span');name.id='worm-name-'+p;name.className='worm-name';const weapon=document.createElement('span');weapon.id='worm-weapon-'+p;weapon.className='own-weapon';weapon.hidden=true;label.append(weapon,name);for(const kind of ['health','reload']){const bar=document.createElement('span'),fill=document.createElement('i');bar.className='worm-bar worm-'+kind;fill.id='worm-'+kind+'-'+p;bar.append(fill);label.append(bar);}}
   click('players-toggle',()=>{this.shown=!this.shown;el('player-panel').hidden=!this.shown;el('players-toggle').setAttribute('aria-expanded',String(this.shown));});
@@ -30,10 +30,15 @@ export class ArenaUI{
  nextCamera(free=false){const seats=this.c.room.room?.members.filter(m=>m.seat>=0).map(m=>m.seat).sort()||[];const choices:(number|'free')[]=[...seats,'free'];this.setCamera(free?'free':choices[(choices.indexOf(this.camera)+1)%choices.length]);}
  reset(){this.lastWeapon=[-1,-1];this.weaponUntil=[0,0];this.deathSeq=[0,0];this.cycle=-1;for(const p of [0,1])el('worm-label-'+p).hidden=true;}
  room(r:Room,ping:(id:string)=>number|undefined){
-  const newRoom=this.roomId!==r.id;if(newRoom){this.roomId=r.id;this.chatSeq=0;this.chatSeen.clear();this.pendingChat=[];el('chat-feed').replaceChildren();el('kill-feed').replaceChildren();this.reset();this.camera='free';}
-  if(!newRoom&&r.id!=='local'&&r.members.some(member=>!this.memberIds.has(member.id)))this.beep();
-  this.memberIds=new Set(r.members.map(member=>member.id));
+  const newRoom=this.roomId!==r.id||this.roomSelf!==r.self;if(newRoom){this.roomId=r.id;this.roomSelf=r.self;this.chatSeq=0;this.chatSeen.clear();this.pendingChat=[];el('chat-feed').replaceChildren();el('kill-feed').replaceChildren();this.reset();this.camera='free';}
   for(const msg of r.chat)this.receiveChat(msg,!newRoom);
+  const memberNames=new Map(r.members.map(member=>[member.id,playerName(member.name)]));
+  if(!newRoom&&r.id!=='local'){
+   for(const [id,name] of this.memberNames)if(!memberNames.has(id))this.chatLine(name,'left the room.',true);
+   let joined=false;for(const [id,name] of memberNames)if(!this.memberNames.has(id)){this.chatLine(name,'joined the room.',true);joined=true;}
+   if(joined)this.beep();
+  }
+  this.memberNames=memberNames;
   const list=el('overlay-players'),focusedMember=list.contains(document.activeElement)?(document.activeElement as HTMLElement).dataset.followPlayer:undefined;list.replaceChildren();const members=orderPlayers(r.members,seat=>this.c.playing()?this.state[16+seat]||0:0);
   for(const m of members){
    const canFollow=this.c.seat()<0&&m.seat>=0&&this.c.playing(),row=document.createElement('tr'),cell=document.createElement('td'),identity=document.createElement(canFollow?'button':'div');identity.className='player-identity';
@@ -49,7 +54,7 @@ export class ArenaUI{
  }
  private unlockChatAudio(){if(!this.c.sound())return;try{this.chatAudio??=new AudioContext();if(this.chatAudio.state==='suspended')void this.chatAudio.resume();}catch{}}
  private beep(){if(!this.c.sound())return;this.unlockChatAudio();const ctx=this.chatAudio;if(!ctx||ctx.state!=='running')return;const tone=ctx.createOscillator(),gain=ctx.createGain(),now=ctx.currentTime;tone.type='square';tone.frequency.setValueAtTime(880,now);gain.gain.setValueAtTime(.035,now);gain.gain.exponentialRampToValueAtTime(.001,now+.065);tone.connect(gain);gain.connect(ctx.destination);tone.start(now);tone.stop(now+.07);tone.onended=()=>{tone.disconnect();gain.disconnect();};}
- private chatLine(name:string,text:string){const line=document.createElement('p'),label=document.createElement('strong');label.textContent=playerName(name);line.append(label,chatText(text));el('chat-feed').append(line);this.trimChat();return line;}
+ private chatLine(name:string,text:string,system=false){const line=document.createElement('p'),label=document.createElement('strong');if(system)line.className='chat-system';label.textContent=playerName(name);line.append(label,system?document.createTextNode(' '+text):chatText(text));el('chat-feed').append(line);this.trimChat();return line;}
  private trimChat(){const feed=el('chat-feed'),messages=[...feed.children].filter(line=>!line.classList.contains('chat-exit'));for(const line of messages.slice(0,Math.max(0,messages.length-8))){line.classList.add('chat-exit');setTimeout(()=>line.remove(),500);}feed.scrollTop=feed.scrollHeight;}
  receiveChat(msg:Room['chat'][number],sound=true){
   if(!msg||!Number.isSafeInteger(msg.seq)||msg.seq<1||typeof msg.player!=='string'||typeof msg.name!=='string'||typeof msg.message!=='string'||msg.message.length>500)return;

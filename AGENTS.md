@@ -242,6 +242,10 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
   constrain names with ellipsis, and size the player table to its content. K/D headers stay compact.
 - Beep for new room members (including spectators), respecting mute. Do not beep for
   the initial member snapshot or repeated polls; a later re-entry is a new join.
+- Show room joins and quits as subdued system messages in the bottom-left chat,
+  using the same eight-message retention/fade behavior. Include spectators; do not
+  report seat, profile or host-role changes as joins/quits. Seed the initial roster
+  silently, and reset it on a new room entry. Keep the latest name for quit notices.
 
 - When the owner leaves or its 120-second heartbeat expires, elect a live remaining member
   with the lowest recorded ping to the former host (unknown ping last). Host alone reports
