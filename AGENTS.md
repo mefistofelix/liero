@@ -106,6 +106,8 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   play, copy invite, fullscreen, profile dropdown, current-room settings dropdown,
   Room Browser/create, player count/list and audio. Dropdowns align to the right.
   Copy room link and Fullscreen are the final two buttons at the far right.
+- A GitHub icon links to https://github.com/mefistofelix/liero in a new tab,
+  fixed at the bottom right, separate from the toolbar.
 - Room Browser has three tabs: Explore (default), Create room and Local play. Creation settings
   belong only in the Create room panel, never below the server listing.
 - Help has its own right-toolbar icon and is not part of Profile. Installation
