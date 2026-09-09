@@ -83,12 +83,14 @@ window.addEventListener('keydown',e=>{if(e.code==='Escape'&&!document.querySelec
 let roomSort:RoomSort={key:'count',ascending:false},renderRoomList=()=>{};
 for(const key of ['name','count','ping','mode'] as const)click('sort-rooms-'+key,()=>{roomSort={key,ascending:roomSort.key===key?!roomSort.ascending:key!=='count'};renderRoomList();});
 for(const id of ['rooms-empty','rooms-full'])input(id).onchange=()=>renderRoomList();
+let pruneRoomList=(ids:Set<string>)=>{};let checkingDirectory=false;
 async function refreshRooms(){
  el('room-browser').hidden=false;el('room-lobby').hidden=true;el('rooms-heading').textContent='Room Browser';const version=++roomListVersion;el('room-list-status').textContent='Measuring room ping…';
  const {rooms}=await api('/rooms');if(version!==roomListVersion)return;const list=el('room-list');list.replaceChildren();
  const entries:{room:Room;row:HTMLTableRowElement;ping:HTMLElement;ms:number}[]=[];
  const sort=()=>{entries.sort((a,b)=>compareRooms(a,b,roomSort));list.replaceChildren();let shown=0;for(const entry of entries)if(includeRoom(entry.room,input('rooms-empty').checked,input('rooms-full').checked)){list.append(entry.row);shown++;}for(const key of ['name','count','ping','mode'])el('sort-rooms-'+key).parentElement!.setAttribute('aria-sort',roomSort.key===key?(roomSort.ascending?'ascending':'descending'):'none');el('room-list-status').textContent=rooms.length?shown+' / '+rooms.length+' rooms · all countries':'No public rooms yet. Create a room or find the closest room.';};renderRoomList=sort;
  for(const r of rooms as Room[]){const row=document.createElement('tr');const cell=(text:string)=>{const td=document.createElement('td');td.textContent=text;row.append(td);return td;};cell(r.name).prepend(countryFlag(r.country));cell(r.count+'/'+r.capacity);const ping=cell('—');ping.title='Direct WebRTC round-trip time to host';const rule=cell(modeNames[r.settings.mode]);const subtitle=document.createElement('small');subtitle.textContent=r.settings.rotation.length+' maps · '+r.phase;rule.append(subtitle);const join=button('Watch / join',()=>joinRoom(r.id,''),'requires-engine');join.disabled=!game;cell('').append(join);list.append(row);entries.push({room:r,row,ping,ms:Infinity});}
+ pruneRoomList=ids=>{if(version!==roomListVersion)return;for(let i=entries.length-1;i>=0;i--)if(!ids.has(entries[i].room.id))entries.splice(i,1);for(let i=rooms.length-1;i>=0;i--)if(!ids.has(rooms[i].id))rooms.splice(i,1);sort();};
  const jobs=[...entries];sort();let next=0;
  const measure=async(entry:typeof entries[number])=>{try{const ms=entry.room.id===room.id&&room.host?0:await probeRoom(entry.room.id);if(version!==roomListVersion)return;entry.ms=ms;entry.ping.textContent=ms+' ms';sort();}catch{if(version===roomListVersion){entry.ping.title='Host ping unavailable';entry.ping.replaceChildren(button('Retry ping',()=>measure(entry)));}}};
  await Promise.all(Array.from({length:Math.min(4,entries.length)},async()=>{while(version===roomListVersion){const entry=jobs[next++];if(!entry)break;await measure(entry);}}));
@@ -97,6 +99,11 @@ async function refreshRooms(){
 function roomTab(tab='explore'){for(const name of ['explore','create','local']){el(name+'-panel').hidden=name!==tab;el(name+'-tab').setAttribute('aria-selected',String(name===tab));}}
 click('explore-tab',()=>roomTab());click('create-tab',()=>roomTab('create'));click('local-tab',()=>roomTab('local'));
 onMenu('rooms-menu',()=>{roomTab();return refreshRooms();});click('refresh-rooms',refreshRooms);
+window.setInterval(async()=>{
+ if(checkingDirectory||document.hidden||!el<HTMLDialogElement>('rooms-menu').open||el('explore-panel').hidden)return;
+ checkingDirectory=true;const version=roomListVersion;
+ try{const {rooms}=await api('/rooms');if(version===roomListVersion)pruneRoomList(new Set(rooms.map((r:Room)=>r.id)));}catch{}finally{checkingDirectory=false;}
+},15000);
 async function createRoom(auto=false){await guard(async()=>{if(room.id)await leaveRoom();if(!prefs.rotation.length)throw new Error('Enable at least one map.');prefs.roomName=input('room-name').value.trim()||'My room';prefs.privateRoom=input('private-room').checked;save();game?.stop();playing=false;round=undefined;setup=undefined;quickMatching=auto;localTwo=false;profileButtons();await room.create({...prefs,privateRoom:auto?false:prefs.privateRoom},false);closeMenus();waitingPreview();});}
 async function joinRoom(id:string,invite:string,automatic=false){await guard(async()=>{if(!game)throw new Error('Wait for the game to finish loading.');if(id===room.id){closeMenus();return;}if(room.id)await leaveRoom();game.stop();playing=false;round=undefined;setup=undefined;localTwo=false;profileButtons();await room.join(id,invite,prefs);closeMenus();waitingPreview();});}
 click('create-room',()=>createRoom());click('quick-match',()=>autoConnect());

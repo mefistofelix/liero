@@ -117,3 +117,28 @@ test('all player-name write endpoints reject names longer than 20 characters',as
   expect((await f.request('a','/rooms/'+id+'/state')).data.members.map((m:any)=>m.name)).toEqual(['Host']);
  }finally{f.sql.close();}
 });
+
+
+test('rooms expire without the host heartbeat even while guests remain active, with cascading cleanup',async()=>{
+ const f=await fixture();try{
+  const {id}=(await f.request('a','/rooms','POST',{name:'Abandoned',playerName:'Host',settings})).data;
+  await f.request('b','/rooms/'+id+'/join','POST',{name:'Guest'});
+  await f.request('b','/rooms/'+id+'/chat','POST',{message:'Hello'});
+  await f.request('b','/rooms/'+id+'/signals','POST',{data:{type:'offer',sdp:'test'}});
+  const expires=f.sql.query('SELECT expires_at FROM rooms WHERE id=?').get(id).expires_at;
+  await f.request('b','/rooms/'+id+'/state');expect(f.sql.query('SELECT expires_at FROM rooms WHERE id=?').get(id).expires_at).toBe(expires);
+  f.sql.query('UPDATE rooms SET expires_at=0 WHERE id=?').run(id);
+  expect((await f.request('b','/rooms/'+id+'/state')).status).toBe(404);
+  for(const table of ['rooms','members','room_chat','room_signals'])expect(f.sql.query('SELECT COUNT(*) n FROM '+table).get().n).toBe(0);
+ }finally{f.sql.close();}
+});
+
+test('rooms with a missing or expired owner are removed from discovery',async()=>{
+ const f=await fixture();try{
+  for(const mode of ['missing','expired']){
+   const {id}=(await f.request('a','/rooms','POST',{name:'Orphan',playerName:'Host',settings})).data;
+   if(mode==='missing')f.sql.query('DELETE FROM members WHERE room=?').run(id);else f.sql.query('UPDATE members SET expires_at=0 WHERE room=?').run(id);
+   expect((await f.request('b','/rooms')).data.rooms).toHaveLength(0);
+  }
+ }finally{f.sql.close();}
+});

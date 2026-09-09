@@ -220,3 +220,7 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
   constrain names with ellipsis, and size the player table to its content. K/D headers stay compact.
 - Beep for new room members (including spectators), respecting mute. Do not beep for
   the initial member snapshot or repeated polls; a later re-entry is a new join.
+
+- Delete a room when its owner leaves; expire it after 120 seconds without the owner heartbeat.
+  Guests cannot renew the room expiry. Remove orphaned rooms and cascade chat/signals/members.
+  While Explore is visible, prune vanished rooms every 15 seconds without repeating ping probes.

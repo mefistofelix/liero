@@ -25,7 +25,7 @@ function publicRoom(r,count=0){return {id:r.id,name:r.name,region:r.region,count
 export async function roomAPI(request,env,key){
  const db=env.DB,url=new URL(request.url),parts=url.pathname.split('/').filter(Boolean),id=parts[2],action=parts[3]||'',now=Math.floor(Date.now()/1000);
  try{
-  await db.batch([statement(db,'DELETE FROM rooms WHERE expires_at<=?',now),statement(db,'DELETE FROM members WHERE expires_at<=?',now),statement(db,'DELETE FROM room_signals WHERE expires_at<=?',now),statement(db,'DELETE FROM room_departures WHERE expires_at<=?',now)]);
+  await db.batch([statement(db,'DELETE FROM rooms WHERE expires_at<=? OR NOT EXISTS (SELECT 1 FROM members WHERE members.room=rooms.id AND members.player=rooms.owner AND members.expires_at>?)',now,now),statement(db,'DELETE FROM members WHERE expires_at<=?',now),statement(db,'DELETE FROM room_signals WHERE expires_at<=?',now),statement(db,'DELETE FROM room_departures WHERE expires_at<=?',now)]);
   if(!id&&request.method==='GET'){
    const rows=await query(db,`SELECT r.*,COUNT(m.player) count,SUM(CASE WHEN m.seat>=0 THEN 1 ELSE 0 END) players FROM rooms r LEFT JOIN members m ON m.room=r.id WHERE r.private=0 GROUP BY r.id ORDER BY r.name LIMIT 100`);
    return json({rooms:rows.map(r=>({...publicRoom(r,r.count),players:r.players})),region:detectRegion(request.cf)});
