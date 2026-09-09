@@ -20,6 +20,7 @@ const modeNames=['Kill ’em all','Game of tag','Holdazone','Scales of justice']
 let module:EngineModule,game:LocalGame,maps:MapLibrary,weapons:WeaponLibrary,playing=false,localTwo=false,follow=0;
 let stats=new Int32Array(20),activeLoadouts=prefs.loadouts.map(a=>[...a]),playerNames=[prefs.name,'Bot'];
 let round:NetworkRound|undefined,setup:any,staging:any,peerLoadouts=new Map<string,number[]>(),peerPings:Record<string,number>={};
+let handoffMap:{level:Level;data:Uint8Array|null;seed:number}|undefined;
 let nextMapId:string|undefined;let startingRound:Promise<void>|undefined;
 let stopping=false,lastRulesKey='',profilePlayer=0,profileTimer=0;let profileSaving=false,profileDirty=false;
 let templeData:Uint8Array;
@@ -116,7 +117,7 @@ async function autoConnect(){
  await createRoom(true);
 }
 onMenu('room-settings-menu',()=>{const r=room.room,editable=!r||room.host,rules=r?.settings||prefs.rules;select('game-mode').value=String(rules.mode);input('rule-lives').value=String(rules.lives);input('rule-loading').value=String(rules.loading);input('rule-bonuses').value=String(rules.bonuses);el('settings-form').querySelectorAll<HTMLInputElement|HTMLButtonElement|HTMLSelectElement>('input,button,select').forEach(control=>setDisabled(control,!editable));el('room-settings-access').textContent=r?r.name+' · '+(editable?'You can edit this room.':'View only · only the host can change room rules.'):'Defaults for your next room or local game.';});
-async function leaveRoom(){nextMapId=undefined;maps?.setRoom(undefined);weapons?.setAvailability(weaponPool(prefs.rules.allowedWeapons));clearTimeout(roundTimeout);roundTimeout=0;recorder.stop();game?.stop();playing=false;round=undefined;setup=undefined;staging=undefined;quickMatching=false;peerLoadouts.clear();peerPings={};await room.leave();history.replaceState(null,'',location.pathname);el('room-browser').hidden=false;el('room-lobby').hidden=true;el('rooms-heading').textContent='Room Browser';el('connection').textContent='Local';el('hud').hidden=true;el('spectator-tools').hidden=true;arena.reset();el('overlay-players').replaceChildren();el('player-count').textContent='0';}
+async function leaveRoom(){handoffMap=undefined;nextMapId=undefined;maps?.setRoom(undefined);weapons?.setAvailability(weaponPool(prefs.rules.allowedWeapons));clearTimeout(roundTimeout);roundTimeout=0;recorder.stop();game?.stop();playing=false;round=undefined;setup=undefined;staging=undefined;quickMatching=false;peerLoadouts.clear();peerPings={};await room.leave();history.replaceState(null,'',location.pathname);el('room-browser').hidden=false;el('room-lobby').hidden=true;el('rooms-heading').textContent='Room Browser';el('connection').textContent='Local';el('hud').hidden=true;el('spectator-tools').hidden=true;arena.reset();el('overlay-players').replaceChildren();el('player-count').textContent='0';}
 click('leave-room',async()=>{await leaveRoom();if(!el<HTMLDialogElement>('rooms-menu').open)openMenu('rooms-menu');else await refreshRooms();});
 const inviteURL=()=>location.origin+'/#room='+room.id+(room.room?.private?'&invite='+room.invite:'');
 async function copyInvite(){if(!room.id){notice('Join a room first.');return;}const url=inviteURL();input('invite-link').value=url;input('invite-link').hidden=false;try{await navigator.clipboard.writeText(url);notice('Invite link copied.');}catch{input('invite-link').select();openMenu('rooms-menu');el('room-browser').prepend(input('invite-link'));notice('Select and copy this invite link.');}}
@@ -141,9 +142,16 @@ function renderRoom(r:Room){
   else if(round&&changed&&!ready){round.ended=true;game.stop();playing=false;room.call('phase','PUT',{phase:'lobby'}).catch(report);room.broadcast({type:'ended',round:round.id});round=undefined;setup=undefined;waitingPreview();}
  }
 }
+room.onHostChanged=()=>{
+ const previous=setup,r=room.room!;if(round)round.ended=true;game?.stop();playing=false;clearTimeout(roundTimeout);roundTimeout=0;nextMapId=undefined;
+ handoffMap=room.host&&previous?.map?{level:{id:previous.map.id||'received:'+previous.id,name:previous.map.name,data:mapData||undefined},data:mapData,seed:previous.seed}:undefined;
+ round=undefined;setup=undefined;staging=undefined;peerLoadouts.clear();peerPings={};
+ if(room.host){prefs.roomName=r.name;prefs.privateRoom=r.private;prefs.rules={...r.settings};prefs.rotation=[...r.settings.rotation];save();if(handoffMap&&!maps.levels.some(l=>l.id===handoffMap!.level.id))maps.levels.push(handoffMap.level);}
+ notice(room.host?'The host left. You are the new host; restarting the current level.':'The host changed. Reconnecting to continue in this room.');
+};
 room.onState=renderRoom;room.onError=error=>{if([403,404,409].includes((error as any).status)&&room.id){void leaveRoom().then(()=>{if(!el<HTMLDialogElement>('rooms-menu').open)openMenu('rooms-menu');notice('The room has closed. Choose another room.');}).catch(report);return;}el('connection').textContent='Room unavailable';el('round-status').textContent=error.message;};
 room.onReady=id=>{if(!room.host)room.send(id,{type:'ready',version:NETWORK_VERSION,loadout:prefs.loadouts[0]});};
-room.onLost=id=>{if(round&&!round.ended&&(id===room.room?.owner||(room.room?.members.find(m=>m.id===id)?.seat??-1)>=0)){round.ended=true;game.stop();playing=false;notice('Player connection lost. Return to the room to restart.');if(room.host)room.call('phase','PUT',{phase:'lobby'}).catch(report);}};
+room.onLost=id=>{if(id===room.room?.owner){if(round)round.ended=true;game?.stop();playing=false;notice('Host connection lost. Waiting for the room to reconnect or transfer.');void room.refresh().catch(report);return;}if(round&&!round.ended&&(id===room.room?.owner||(room.room?.members.find(m=>m.id===id)?.seat??-1)>=0)){round.ended=true;game.stop();playing=false;notice('Player connection lost. Return to the room to restart.');if(room.host)room.call('phase','PUT',{phase:'lobby'}).catch(report);}};
 function validLoadout(v:any){return Array.isArray(v)&&v.length===5&&v.every(n=>Number.isInteger(n)&&n>=1&&n<=40);}
 function sendSetup(id:string){
  if(!setup)return;
@@ -155,15 +163,15 @@ function launchNetwork(value:any,data:Uint8Array|null){
  applyRules(value.rules,value.loadouts,value.colors,data);lastRulesKey=rulesKey(value.rules);setup=value;mapData=data;localTwo=false;follow=room.seat===1?1:0;playerNames=[0,1].map(p=>playerName(value.players?.[p],''));setup.players=[...playerNames];el('map-name').textContent=value.map.name;
  if(round)round.ended=true;
  if(value.preview){round=undefined;playing=false;arena.reset();game.preview(value.seed);el('hud').hidden=true;el('spectator-tools').hidden=true;arena.nextCamera(true);return;}
- round=new NetworkRound(module,room,value.id,room.seat,value.participants??3);round.onError=message=>{game.stop();playing=false;notice(message);openMenu('rooms-menu');};round.onEnd=()=>{if(room.host){room.call('phase','PUT',{phase:'lobby'}).catch(report);roomTimeoutNext();}};
+ round=new NetworkRound(module,room,value.id,Array.isArray(value.playerIds)?value.playerIds.indexOf(room.room?.self):room.seat,value.participants??3);round.onError=message=>{console.error(message);game.stop();playing=false;notice(message);openMenu('rooms-menu');};round.onEnd=()=>{if(room.host){room.call('phase','PUT',{phase:'lobby'}).catch(report);roomTimeoutNext();}};
  game.start(false,false,value.seed,round);game.setSound(prefs.sound);select('camera').options[0].textContent='Follow '+playerNames[0];select('camera').options[1].textContent='Follow '+playerNames[1];select('camera').value=String(follow);showGame();if(round.spectator)arena.nextCamera(true);
 }
 function roomTimeoutNext(){clearTimeout(roundTimeout);roundTimeout=0;roundTimeout=window.setTimeout(()=>{roundTimeout=0;if(room.host&&room.id&&room.room?.members.filter(m=>m.seat>=0).length>0)startOnline().catch(report);},5000);}
 async function startOnline(mapId?:string,restart=false){if(startingRound)return startingRound;const task=guard(async()=>{
  if(!room.host||!room.room)throw new Error('Only the host can start a round.');if(round&&!round.ended&&!restart)throw new Error('A round is already running.');
  const players=[0,1].map(p=>room.room!.members.find(m=>m.seat===p));if(!players.some(Boolean)||players.some(m=>m&&m.id!==room.room!.self&&!peerLoadouts.has(m.id)))throw new Error('Wait for the players to connect.');
- const chosen=mapId??nextMapId,next=chosen?await maps.pick(chosen):await maps.next(room.room!.settings.rotation);nextMapId=undefined;clearTimeout(roundTimeout);roundTimeout=0;const loadouts=players.map(m=>!m||m.id===room.room!.self?[...prefs.loadouts[0]]:[...peerLoadouts.get(m.id)!]);
- const value={version:NETWORK_VERSION,id:crypto.randomUUID(),seed:crypto.getRandomValues(new Uint32Array(1))[0],rules:{...prefs.rules},loadouts,colors:players.map(m=>m?.color||'#3cac3c'),players:players.map(m=>m?.name||''),playerIds:players.map(m=>m?.id??null),participants:players.reduce((mask,m,p)=>mask|(m?1<<p:0),0),map:{id:next.level.id,name:next.level.name,bytes:next.data?.length||0}};
+ const authority=room.room!.owner,hostEpoch=room.room!.hostEpoch,transfer=mapId?undefined:handoffMap;const chosen=mapId??nextMapId,next=transfer??(chosen?await maps.pick(chosen):await maps.next(room.room!.settings.rotation));if(!room.host||room.room?.owner!==authority||room.room?.hostEpoch!==hostEpoch)return;handoffMap=undefined;nextMapId=undefined;clearTimeout(roundTimeout);roundTimeout=0;const loadouts=players.map(m=>!m||m.id===room.room!.self?[...prefs.loadouts[0]]:[...peerLoadouts.get(m.id)!]);
+ const value={version:NETWORK_VERSION,id:crypto.randomUUID(),seed:transfer?.seed??crypto.getRandomValues(new Uint32Array(1))[0],rules:{...prefs.rules},loadouts,colors:players.map(m=>m?.color||'#3cac3c'),players:players.map(m=>m?.name||''),playerIds:players.map(m=>m?.id??null),participants:players.reduce((mask,m,p)=>mask|(m?1<<p:0),0),map:{id:next.level.id,name:next.level.name,bytes:next.data?.length||0}};
  launchNetwork(value,next.data);for(const m of room.room.members)if(m.id!==room.room.self)sendSetup(m.id);await room.call('phase','PUT',{phase:'playing'});
 });startingRound=task;try{await task;}finally{if(startingRound===task)startingRound=undefined;}}
 async function switchRoomMap(level:Level){
@@ -211,6 +219,7 @@ async function renderArchive(extra?:Recording){
 }
 onMenu('recordings-menu',()=>{setDisabled(el<HTMLButtonElement>('record-start'),!playing||recorder.active||!recorder.supported());if(!recorder.supported())el('record-status').textContent='MP4 recording is not supported by this browser. Try a browser with MP4 MediaRecorder support.';return renderArchive();});
 click('record-start',()=>{if(!playing)throw new Error('Start or watch a game first.');recorder.start(canvas,module.audioStream,room.room?.name||'Local game');el('recording-indicator').hidden=false;setDisabled(el<HTMLButtonElement>('record-start'),true);setDisabled(el<HTMLButtonElement>('record-stop'),false);closeMenus();});
+recorder.onRecordingChange=recording=>{const icon=el('recordings-toggle');icon.classList.toggle('is-recording',recording);icon.title=recording?'Recording in progress · open recordings':'Recordings';icon.setAttribute('aria-label',icon.title);el('recording-indicator').hidden=!recording;};
 click('record-stop',()=>recorder.stop());recorder.onError=error=>{el('recording-indicator').hidden=true;setDisabled(el<HTMLButtonElement>('record-start'),!playing);setDisabled(el<HTMLButtonElement>('record-stop'),true);report(error);};recorder.onSaved=(recording,persisted)=>{el('recording-indicator').hidden=true;setDisabled(el<HTMLButtonElement>('record-start'),!playing);setDisabled(el<HTMLButtonElement>('record-stop'),true);notice(persisted?'Recording saved to the local archive.':'Archive storage is full. Download this recording before closing the page.');renderArchive(recording).catch(report);};
 if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(console.error);
 window.addEventListener('pagehide',()=>{void room.leave().catch(()=>{});recorder.stop();game?.dispose();});

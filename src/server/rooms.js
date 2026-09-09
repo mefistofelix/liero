@@ -21,18 +21,26 @@ async function body(request){
  let parsed;try{parsed=JSON.parse(text+decoder.decode());}catch{fail('Invalid JSON.');}
  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))fail('Invalid JSON.');return parsed;
 }
-function publicRoom(r,count=0){return {id:r.id,name:r.name,region:r.region,country:r.country||'',private:!!r.private,settings:JSON.parse(r.settings),phase:r.phase,count,capacity:16};}
+// Run in the same D1 batch as departures: elect one live successor, or remove an empty room.
+function maintainRooms(db,now){return [
+ statement(db,'DELETE FROM members WHERE expires_at<=? OR player IN (SELECT owner FROM rooms WHERE expires_at<=?)',now,now),
+ statement(db,'DELETE FROM room_signals WHERE room IN (SELECT id FROM rooms WHERE NOT EXISTS (SELECT 1 FROM members WHERE members.room=rooms.id AND members.player=rooms.owner))'),
+ statement(db,`UPDATE rooms SET host_epoch=host_epoch+1,(owner,country,expires_at,phase)=(SELECT player,country,expires_at,'lobby' FROM members WHERE members.room=rooms.id ORDER BY host_ping IS NULL,host_ping,player LIMIT 1)
+ WHERE NOT EXISTS (SELECT 1 FROM members WHERE members.room=rooms.id AND members.player=rooms.owner) AND EXISTS (SELECT 1 FROM members WHERE members.room=rooms.id)`),
+ statement(db,'DELETE FROM rooms WHERE NOT EXISTS (SELECT 1 FROM members WHERE members.room=rooms.id)')
+];}
+function publicRoom(r,count=0){return {id:r.id,hostEpoch:r.host_epoch,name:r.name,region:r.region,country:r.country||'',private:!!r.private,settings:JSON.parse(r.settings),phase:r.phase,count,capacity:16};}
 export async function roomAPI(request,env,key){
  const db=env.DB,url=new URL(request.url),parts=url.pathname.split('/').filter(Boolean),id=parts[2],action=parts[3]||'',now=Math.floor(Date.now()/1000);
  try{
-  await db.batch([statement(db,'DELETE FROM rooms WHERE expires_at<=? OR NOT EXISTS (SELECT 1 FROM members WHERE members.room=rooms.id AND members.player=rooms.owner AND members.expires_at>?)',now,now),statement(db,'DELETE FROM members WHERE expires_at<=?',now),statement(db,'DELETE FROM room_signals WHERE expires_at<=?',now),statement(db,'DELETE FROM room_departures WHERE expires_at<=?',now)]);
+  await db.batch([...maintainRooms(db,now),statement(db,'DELETE FROM room_signals WHERE expires_at<=?',now),statement(db,'DELETE FROM room_departures WHERE expires_at<=?',now)]);
   if(!id&&request.method==='GET'){
    const rows=await query(db,`SELECT r.*,COUNT(m.player) count,SUM(CASE WHEN m.seat>=0 THEN 1 ELSE 0 END) players FROM rooms r LEFT JOIN members m ON m.room=r.id WHERE r.private=0 GROUP BY r.id ORDER BY r.name LIMIT 100`);
    return json({rooms:rows.map(r=>({...publicRoom(r,r.count),players:r.players})),region:detectRegion(request.cf)});
   }
   if(!key)fail('Invalid identity.',401);
   if(!id&&request.method==='DELETE'){
-   await db.batch([statement(db,'INSERT INTO room_departures(player,expires_at) VALUES(?,?) ON CONFLICT(player) DO UPDATE SET expires_at=excluded.expires_at',key,now+300),statement(db,'DELETE FROM rooms WHERE owner=?',key),statement(db,'DELETE FROM members WHERE player=?',key)]);
+   await db.batch([statement(db,'INSERT INTO room_departures(player,expires_at) VALUES(?,?) ON CONFLICT(player) DO UPDATE SET expires_at=excluded.expires_at',key,now+300),statement(db,'DELETE FROM members WHERE player=?',key),...maintainRooms(db,now)]);
    return json({ok:true});
   }
   if((await query(db,'SELECT 1 FROM room_departures WHERE player=?',key)).length)fail('This room session has ended. Join again.',409);
@@ -80,6 +88,11 @@ export async function roomAPI(request,env,key){
    }
   }
   if(!member)fail('Join the room first.',403);
+  if(action==='pings'&&request.method==='PUT'){
+   if(!owner)fail('Only the host can report room pings.',403);const b=await body(request),pings=b.pings;
+   if(!pings||typeof pings!=='object'||Array.isArray(pings)||Object.keys(pings).length>16||Object.entries(pings).some(([player,ms])=>!/^[a-f0-9]{64}$/.test(player)||!Number.isInteger(ms)||ms<0||ms>60000))fail('Invalid room pings.');
+   await db.batch([statement(db,'UPDATE members SET host_ping=NULL WHERE room=?',id),...Object.entries(pings).map(([player,ms])=>statement(db,'UPDATE members SET host_ping=? WHERE room=? AND player=?',ms,id,player))]);return json({ok:true});
+  }
   if(action==='profile'&&request.method==='PUT'){
    const b=await body(request),name=short(b.name,20);if(!/^#[a-f0-9]{6}$/i.test(b.color))fail('Invalid worm color.');
    await query(db,'UPDATE members SET name=?,color=? WHERE room=? AND player=?',name,b.color,id,key);return json({ok:true});
@@ -107,7 +120,7 @@ export async function roomAPI(request,env,key){
    await query(db,'UPDATE rooms SET phase=? WHERE id=?',b.phase,id);return json({ok:true});
   }
   if(!action&&request.method==='DELETE'){
-   await query(db,owner?'DELETE FROM rooms WHERE id=? AND owner=?':'DELETE FROM members WHERE room=? AND player=?',id,key);return json({ok:true});
+   await db.batch([statement(db,'DELETE FROM members WHERE room=? AND player=?',id,key),...maintainRooms(db,now)]);return json({ok:true});
   }
   return json({error:'Operation unavailable.'},405);
  }catch(error){if(error.status)return json({error:error.message},error.status);console.error('Room request failed',error.name);return json({error:'Room service temporarily unavailable.'},503);}

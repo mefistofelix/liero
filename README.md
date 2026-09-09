@@ -107,7 +107,10 @@ Asset tasks: `bun run assets:font`, `bun run assets:icons`, `bun run assets:maps
 ## Current limits
 
 The host must keep its game tab active. Networking uses reliable ordered lockstep;
-prediction, rollback, host migration and a TURN relay are not implemented. Some
+prediction, rollback and a TURN relay are not implemented. When the host leaves or expires,
+the room transfers to the remaining member with the lowest recorded RTT to the old host
+(unknown pings last), reconnects and restarts the current level. It does not resume the
+exact frame. Empty rooms are removed; crash detection can take up to 120 seconds. Some
 network combinations may therefore prevent a direct WebRTC connection. Tests cover
 determinism and selected original behaviors, not exhaustive 1:1 parity or every
 internet network configuration. Clearing browser storage removes local preferences,

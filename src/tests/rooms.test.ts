@@ -2,6 +2,7 @@ import {test,expect} from 'bun:test';
 import {Database} from 'bun:sqlite';
 import {localDatabase} from '../server/local-database.ts';
 import worker from '../server/worker.js';
+const memberKey=(token:string)=>new Bun.CryptoHasher('sha256').update(token.padStart(64,'0')).digest('hex');
 const settings={mode:0,lives:15,loading:100,bonuses:4,rotation:['random','temple']};
 async function fixture(){const sql=new Database(':memory:');const DB=await localDatabase(sql,new URL('../server/migrations/',import.meta.url));return {sql,request:async(token:string,path:string,method='GET',body?:unknown,invite='')=>{const req=new Request('https://game.test/api'+path,{method,headers:{Authorization:'Bearer '+token.padStart(64,'0'),'Content-Type':'application/json',...(invite?{'X-Room-Invite':invite}:{})},body:body?JSON.stringify(body):undefined});Object.defineProperty(req,'cf',{value:{continent:'EU'}});const response=await worker.fetch(req,{DB});return {status:response.status,data:await response.json()};}};}
 test('private rooms hide from explorer and require invite; host owns settings; guests spectate',async()=>{
@@ -14,7 +15,8 @@ test('private rooms hide from explorer and require invite; host owns settings; g
  expect((await f.request('b',`/rooms/${id}/settings`,'PUT',{name:'Hijack',settings})).status).toBe(403);
  expect((await f.request('b',`/rooms/${id}/seat`,'POST',{play:true})).data.seat).toBe(0);
  expect((await f.request('a',`/rooms/${id}`,'DELETE')).status).toBe(200);
- expect((await f.request('b',`/rooms/${id}/state`)).status).toBe(404);
+ const transferred=(await f.request('b',`/rooms/${id}/state`)).data;expect(transferred.owner).toBe(memberKey('b'));expect(transferred.hostEpoch).toBe(1);
+ expect((await f.request('c',`/rooms/${id}/join`,'POST',{name:'Late guest'},invite)).status).toBe(200);
  }finally{f.sql.close();}
 });
 test('room seats cannot be overbooked; chat and signaling are member scoped',async()=>{
@@ -34,7 +36,7 @@ test('room discovery is worldwide and stale hosts disappear',async()=>{
  const f=await fixture();try{
  const create=(token:string,region:string)=>f.request(token,'/rooms','POST',{name:'Quick match',playerName:token,region,settings,auto:true});
  const a=await create('a','EU'),b=await create('b','NA'),c=await create('c','EU');expect(a.data.id).toBe(c.data.id);expect(b.data.id).toBe(c.data.id);expect(c.data.seat).toBe(-1);
- f.sql.query('UPDATE rooms SET expires_at=0 WHERE id=?').run(a.data.id);
+ f.sql.query('UPDATE members SET expires_at=0 WHERE room=?').run(a.data.id);
  const list=(await f.request('d','/rooms')).data.rooms;expect(list).toHaveLength(0);
  }finally{f.sql.close();}
 });
@@ -92,7 +94,8 @@ test('quit removes membership immediately, fences late joins and cannot delete a
   expect(room.members).toHaveLength(2);expect(room.members.filter(m=>m.name==='Guest')).toHaveLength(1);
   await f.request('d','/rooms','DELETE');
   expect((await f.request('d','/rooms','POST',{name:'Late creation',playerName:'Late',settings})).status).toBe(409);
-  await f.request('a','/rooms','DELETE');expect((await f.request('c',`/rooms/${id}/state`)).status).toBe(404);
+  await f.request('a','/rooms','DELETE');expect((await f.request('c',`/rooms/${id}/state`)).data.owner).toBe(memberKey('c'));
+  await f.request('c','/rooms','DELETE');expect((await f.request('e',`/rooms/${id}/state`)).status).toBe(404);
  }finally{f.sql.close();}
 });
 
@@ -119,7 +122,7 @@ test('all player-name write endpoints reject names longer than 20 characters',as
 });
 
 
-test('rooms expire without the host heartbeat even while guests remain active, with cascading cleanup',async()=>{
+test('host timeout transfers to a live guest; the last departure cascades room cleanup',async()=>{
  const f=await fixture();try{
   const {id}=(await f.request('a','/rooms','POST',{name:'Abandoned',playerName:'Host',settings})).data;
   await f.request('b','/rooms/'+id+'/join','POST',{name:'Guest'});
@@ -128,7 +131,8 @@ test('rooms expire without the host heartbeat even while guests remain active, w
   const expires=f.sql.query('SELECT expires_at FROM rooms WHERE id=?').get(id).expires_at;
   await f.request('b','/rooms/'+id+'/state');expect(f.sql.query('SELECT expires_at FROM rooms WHERE id=?').get(id).expires_at).toBe(expires);
   f.sql.query('UPDATE rooms SET expires_at=0 WHERE id=?').run(id);
-  expect((await f.request('b','/rooms/'+id+'/state')).status).toBe(404);
+  const transferred=(await f.request('b','/rooms/'+id+'/state')).data;expect(transferred.owner).toBe(memberKey('b'));expect(transferred.chat).toHaveLength(1);
+  await f.request('b','/rooms','DELETE');
   for(const table of ['rooms','members','room_chat','room_signals'])expect(f.sql.query('SELECT COUNT(*) n FROM '+table).get().n).toBe(0);
  }finally{f.sql.close();}
 });
@@ -140,5 +144,22 @@ test('rooms with a missing or expired owner are removed from discovery',async()=
    if(mode==='missing')f.sql.query('DELETE FROM members WHERE room=?').run(id);else f.sql.query('UPDATE members SET expires_at=0 WHERE room=?').run(id);
    expect((await f.request('b','/rooms')).data.rooms).toHaveLength(0);
   }
+ }finally{f.sql.close();}
+});
+
+
+test('host succession chooses the lowest recorded ping, including spectators, and fences old authority',async()=>{
+ const f=await fixture();try{
+  const {id}=(await f.request('a','/rooms','POST',{name:'Ping election',playerName:'Host',settings})).data;
+  for(const token of ['b','c','d'])await f.request(token,'/rooms/'+id+'/join','POST',{name:token});
+  await f.request('b','/rooms/'+id+'/seat','POST',{play:true});
+  const pings={[memberKey('b')]:80,[memberKey('c')]:15};
+  expect((await f.request('b','/rooms/'+id+'/pings','PUT',{pings})).status).toBe(403);
+  expect((await f.request('a','/rooms/'+id+'/pings','PUT',{pings:{[memberKey('b')]:-5}})).status).toBe(400);
+  expect((await f.request('a','/rooms/'+id+'/pings','PUT',{pings})).status).toBe(200);
+  await f.request('a','/rooms','DELETE');
+  const state=(await f.request('b','/rooms/'+id+'/state')).data;expect(state.owner).toBe(memberKey('c'));expect(state.hostEpoch).toBe(1);expect(state.members).toHaveLength(3);expect(state.settings.rotation).toEqual(settings.rotation);
+  expect((await f.request('a','/rooms/'+id+'/settings','PUT',{name:'Old owner',settings})).status).toBe(409);
+  await f.request('c','/rooms','DELETE');expect((await f.request('b','/rooms/'+id+'/state')).data.owner).toBe(memberKey('b'));
  }finally{f.sql.close();}
 });

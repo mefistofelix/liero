@@ -113,6 +113,7 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - Default loadout: Gauss Gun, Larpa, Chiquita Bomb, Spikeballs, Shotgun, in that order.
   Upgrade the former factory loadout while preserving customized choices.
 - Recordings has its own right-toolbar icon and works during live spectating.
+  While capturing, show a red recording dot on that icon even with the panel closed.
   Audio is controlled only by the toolbar toggle. Neither belongs in Profile.
 - Popup close/Escape returns to the previous menu when opened from that menu
   (e.g. Profile -> Weapons -> close -> Profile), retaining prior tab/form state.
@@ -175,7 +176,8 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   directory, membership, chat and SDP/ICE only. It never carries per-frame simulation.
 - Spectator host coordinates inputs from both remote seats. Late viewers receive
   exact map bytes + bounded input history. No prediction, rollback, TURN service,
-  headless host or host migration is currently implemented. Report these limits honestly.
+  headless host is currently implemented. Host succession restarts the current level;
+  it does not preserve the exact simulation frame. Report these limits honestly.
 
 ## Repository organization
 All new application source, task scripts and tests live under src. Original native
@@ -193,7 +195,7 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
 - Named loadout presets are saved separately for each local player. Selecting, editing
   or dragging slots applies immediately; the compact weapon list also supports dragging weapons into slots.
   The Weapons menu uses the profile that opened it, with one named Loadout selector; Alt+Left/Right also reorders slots. Online
-  changes are host-committed with frame history (protocol 4). Retain ammunition and
+  changes are host-committed with frame history (protocol 5). Retain ammunition and
   reload progress of kept weapons; newly added weapons start their normal reload.
 - Split screen shows a second profile toolbar button; player 1 remains the online
   profile. Close Profile to save and apply, without a Save button or live typing updates.
@@ -221,6 +223,9 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
 - Beep for new room members (including spectators), respecting mute. Do not beep for
   the initial member snapshot or repeated polls; a later re-entry is a new join.
 
-- Delete a room when its owner leaves; expire it after 120 seconds without the owner heartbeat.
-  Guests cannot renew the room expiry. Remove orphaned rooms and cascade chat/signals/members.
+- When the owner leaves or its 120-second heartbeat expires, elect a live remaining member
+  with the lowest recorded ping to the former host (unknown ping last). Host alone reports
+  RTTs to D1 periodically. Keep the room ID, private invite and settings; close only empty rooms.
+  Increment host_epoch on each transfer, discard old-host signaling and stale state snapshots,
+  reconnect peers and restart the current level from received bytes/seed. No seamless frame migration.
   While Explore is visible, prune vanished rooms every 15 seconds without repeating ping probes.

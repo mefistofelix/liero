@@ -9,7 +9,7 @@ export const deleteRecording=(id:string)=>archive('readwrite',s=>s.delete(id));
 export class GameRecorder{
  private completion?:Promise<void>;private finish=()=>{};private finalizing=false;
  private recorder?:MediaRecorder;private chunks:Blob[]=[];private startTime=0;private raf=0;private videoStream?:MediaStream;private name='';private bytes=0;
- onSaved=(recording:Recording,persisted:boolean)=>{};onError=(error:Error)=>{};
+ onRecordingChange=(recording:boolean)=>{};onSaved=(recording:Recording,persisted:boolean)=>{};onError=(error:Error)=>{};
  get active(){return this.recorder?.state==='recording'||this.finalizing;}
  supported(){return typeof MediaRecorder!=='undefined'&&['video/mp4;codecs=avc1.42001E,mp4a.40.2','video/mp4'].some(t=>MediaRecorder.isTypeSupported(t));}
  start(game:HTMLCanvasElement,audio:MediaStream|undefined,name:string){
@@ -25,6 +25,7 @@ export class GameRecorder{
   this.recorder.onerror=()=>{this.onError(new Error('Recording failed.'));this.stop();};
   this.completion=new Promise<void>(resolve=>{this.finish=()=>{this.finalizing=false;resolve();};});
   this.recorder.onstop=async()=>{
+   this.onRecordingChange(false);
    this.finalizing=true;try{
    cancelAnimationFrame(this.raf);this.videoStream?.getTracks().forEach(t=>t.stop());
    const recording={id:crypto.randomUUID(),name:this.name,date:this.startTime,duration:Date.now()-this.startTime,blob:new Blob(this.chunks,{type:'video/mp4'})};this.chunks=[];
@@ -32,7 +33,7 @@ export class GameRecorder{
    try{await archive('readwrite',s=>s.put(recording));this.onSaved(recording,true);}catch{this.onSaved(recording,false);}
    }finally{this.finish();}
   };
-  this.recorder.start(1000);
+  this.recorder.start(1000);this.onRecordingChange(true);
  }
- stop(){if(this.recorder?.state==='recording'){this.finalizing=true;this.recorder.stop();}return this.completion??Promise.resolve();}
+ stop(){if(this.recorder?.state==='recording'){this.finalizing=true;this.recorder.stop();this.onRecordingChange(false);}return this.completion??Promise.resolve();}
 }

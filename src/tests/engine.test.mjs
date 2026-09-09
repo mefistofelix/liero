@@ -7,6 +7,18 @@ import create from '../browser/engine/openliero.mjs';
 const engineDir=new URL('../browser/engine/',import.meta.url);
 const fresh=()=>create({locateFile:file=>fileURLToPath(new URL(file,engineDir))});
 const state=m=>Array.from(m.HEAP32.subarray(m._liero_info()>>2,(m._liero_info()>>2)+12));
+
+test('restarting a used engine matches a fresh peer before and after throwing a rope',async()=>{
+ const a=await fresh(),b=await fresh();
+ const start=m=>{m._liero_options(0,15,20,4,0);m._liero_start(789,0);m._liero_participants(3);m._liero_begin_play();};
+ start(a);for(let frame=0;frame<200;frame++)a._liero_step(frame===0?16:0,96,0,0,64,0);
+ start(a);start(b);expect(a._liero_hash()).toBe(b._liero_hash());
+ for(let frame=0;frame<400;frame++){
+  const inputs=[frame===100?16:frame>200?8:0,96,0,0,64,0];
+  a._liero_step(...inputs);b._liero_step(...inputs);
+  expect(a._liero_hash(),`restart frame ${frame}`).toBe(b._liero_hash());
+ }
+});
 test('live rules rescale an ongoing reload without restarting or replacing disabled weapons',async()=>{
  const m=await fresh();m._liero_options(0,99,100,0,0);for(let p=0;p<2;p++)for(let k=0;k<5;k++)m._liero_loadout(p,k,1);m._liero_start(1,0);
  let offset=0;for(let f=0;f<2000;f++){m._liero_step(8,0,0,0,64,0);offset=m._liero_info()>>2;if(m.HEAP32[offset+47]>20)break;}

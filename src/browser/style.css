@@ -66,3 +66,5 @@ button[aria-busy=true]::after{content:'';display:block;flex:0 0 16px;width:16px;
 #player-panel{width:fit-content;max-width:100%;margin-left:auto;overflow-x:auto}.member-name{min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#chat-feed strong,#chat-history strong{display:inline-block;max-width:20ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}#worm-labels .worm-name{max-width:min(20ch,35vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.kill-entry{max-width:100%}.kill-name{min-width:0;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 #overlay-players .member-name{max-width:180px}
+
+#recordings-toggle.is-recording{position:relative;color:#ff6e6e}#recordings-toggle.is-recording::before{content:"";position:absolute;right:3px;top:3px;width:7px;height:7px;border-radius:50%;background:#ff4b4b;box-shadow:0 0 0 2px #222e30}

@@ -354,8 +354,10 @@ EMSCRIPTEN_KEEPALIVE unsigned liero_hash(){
     for(int p=0;p<2;++p){auto& w=*g.worms[p];
         mix(w.pos.x);mix(w.pos.y);mix(w.vel.x);mix(w.vel.y);mix(w.aimingAngle);
         mix(w.health);mix(w.lives);mix(w.kills);mix(w.currentWeapon);
-        mix(w.ninjarope.pos.x);mix(w.ninjarope.pos.y);mix(w.ninjarope.length);
-        mix(w.ninjarope.out);mix(w.ninjarope.attached);
+        // Original Liero does not initialize rope coordinates/length until a throw.
+        // Inactive rope storage is not simulation state and differs across sessions.
+        mix(w.ninjarope.out);
+        if(w.ninjarope.out){mix(w.ninjarope.pos.x);mix(w.ninjarope.pos.y);mix(w.ninjarope.length);mix(w.ninjarope.attached);}
         for(int k=0;k<5;++k){mix(w.weapons[k].ammo);mix(w.weapons[k].loadingLeft);}}
     return hash;
 }

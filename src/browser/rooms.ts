@@ -2,7 +2,7 @@ import type {Preferences} from './preferences.ts';
 import {RoomPresence,browserPresenceLease} from './room-presence.ts';
 import {localCountry} from './flags.ts';
 export type Member={id:string;name:string;color:string;seat:number;country?:string};
-export type Room={id:string;name:string;region:string;country:string;private:boolean;phase:string;count:number;capacity:number;players?:number;settings:any;self:string;owner:string;members:Member[];chat:{seq:number;player:string;name:string;message:string;created_at:number}[]};
+export type Room={id:string;hostEpoch?:number;name:string;region:string;country:string;private:boolean;phase:string;count:number;capacity:number;players?:number;settings:any;self:string;owner:string;members:Member[];chat:{seq:number;player:string;name:string;message:string;created_at:number}[]};
 const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
 export async function api(path:string,method='GET',body?:unknown,invite='',identity=token){
  const response=await fetch(`/api${path}`,{method,headers:{Authorization:`Bearer ${identity}`,...(body?{'Content-Type':'application/json'}:{}),...(invite?{'X-Room-Invite':invite}:{})},body:body?JSON.stringify(body):undefined,keepalive:method==='DELETE',signal:AbortSignal.timeout(12000)});
@@ -35,7 +35,7 @@ export class RoomClient{
  private presence=new RoomPresence((()=>{try{return sessionStorage;}catch{return undefined;}})(),['reload','back_forward'].includes((performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming)?.type),identity=>api('/rooms','DELETE',undefined,'',identity),browserPresenceLease());
  recover(){return this.presence.leave();}
  private timer=0;private cursor=0;private stopped=true;private connecting=new Set<string>();private pingTimes=new Map<string,number>();private pollCount=0;
- onState=(room:Room)=>{};onPacket=(from:string,packet:Packet)=>{};onReady=(id:string)=>{};onLost=(id:string)=>{};onError=(error:Error)=>{};
+ onHostChanged=(previous:string,next:string)=>{};onState=(room:Room)=>{};onPacket=(from:string,packet:Packet)=>{};onReady=(id:string)=>{};onLost=(id:string)=>{};onError=(error:Error)=>{};
  get host(){return !!this.room&&this.room.self===this.room.owner;}
  get seat(){return this.room?.members.find(m=>m.id===this.room?.self)?.seat??-1;}
  async create(p:Preferences,auto=false){
@@ -51,9 +51,18 @@ export class RoomClient{
  }
  private async enter(id:string,invite:string){this.id=id;this.invite=invite;this.cursor=0;this.stopped=false;await this.poll();}
  async call(action:string,method='GET',body?:unknown){if(!this.id||this.stopped)throw new Error('Join a room first.');return api('/rooms/'+this.id+(action?'/'+action:''),method,body,this.invite,this.identity);}
- async refresh(){const epoch=this.epoch;if(!this.id)return;const state:Room=await this.call('state');if(epoch!==this.epoch||this.stopped)return;this.room=state;this.onState(state);}
+ async refresh(){const epoch=this.epoch;if(!this.id)return;const state:Room=await this.call('state');if(epoch!==this.epoch||this.stopped)return;if(this.acceptState(state))this.onState(state);}
+ private acceptState(state:Room){
+  const previous=this.room;if(previous?.id===state.id&&(previous.hostEpoch||0)>(state.hostEpoch||0))return false;this.room=state;
+  if(previous&&previous.owner!==state.owner){
+   const wires=[...this.wires.values()];this.wires.clear();this.connecting.clear();this.pings.clear();this.pingTimes.clear();for(const wire of wires)wire.close();
+   this.onHostChanged(previous.owner,state.owner);
+  }
+  for(const member of previous?.members||[])if(!state.members.some(m=>m.id===member.id)){const wire=this.wires.get(member.id);this.wires.delete(member.id);this.connecting.delete(member.id);this.pings.delete(member.id);wire?.close();}
+  return true;
+ }
  private wire(id:string){
-  const epoch=this.epoch,current=()=>epoch===this.epoch&&!this.stopped;
+  const epoch=this.epoch,current=()=>epoch===this.epoch&&!this.stopped&&this.wires.get(id)===wire;
   const wire=new Wire(data=>current()?this.call('signals','POST',{to:id,data}):Promise.resolve(),packet=>{
    if(!current())return;
    if(packet.type==='leaving'){void this.refresh().catch(error=>{if(current())this.onError(error);});return;}
@@ -67,7 +76,7 @@ export class RoomClient{
  private async poll(){
   const epoch=this.epoch,current=()=>epoch===this.epoch&&!this.stopped;if(!current())return;
   try{
-   const room:Room=await this.call('state');if(!current())return;const previous=this.room;this.room=room;for(const member of previous?.members||[])if(!room.members.some(m=>m.id===member.id)){const wire=this.wires.get(member.id);this.wires.delete(member.id);this.connecting.delete(member.id);this.pings.delete(member.id);wire?.close();}
+   let room:Room=await this.call('state');if(!current())return;if(!this.acceptState(room))room=this.room!;
    const inbox=await this.call(`signals?after=${this.cursor}`);if(!current())return;
    for(const signal of inbox.signals){this.cursor=Math.max(this.cursor,signal.seq);const data=JSON.parse(signal.body);let wire=this.wires.get(signal.sender);
     if(!wire&&['offer','probe-offer','candidate'].includes(data.type)&&this.host)wire=this.wire(signal.sender);
@@ -76,7 +85,7 @@ export class RoomClient{
    if(!this.host&&!this.wires.has(room.owner)&&!this.connecting.has(room.owner)){
     this.connecting.add(room.owner);await this.wire(room.owner).offer();if(!current())return;
    }
-   if(++this.pollCount%3===0)for(const [id,wire]of this.wires)this.ping(id,wire);
+   if(++this.pollCount%3===0){for(const [id,wire]of this.wires)this.ping(id,wire);if(this.host)void this.call('pings','PUT',{pings:Object.fromEntries([...this.pings].filter(([id,ms])=>this.room?.members.some(member=>member.id===id)&&Number.isInteger(ms)&&ms>=0&&ms<=60000))}).catch(()=>{});}
    this.onState(room);
   }catch(error){if(current())this.onError(error as Error);}
   if(current())this.timer=window.setTimeout(()=>this.poll(),1000);
