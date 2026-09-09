@@ -271,7 +271,7 @@ void NObject::process(Game& game)
 					pos,
 					t.splinterColour - colorSub,
 					ownerIdx,
-					0);
+					firedBy); // Preserve the source weapon for damage/death telemetry.
 			}
 		}
 

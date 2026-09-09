@@ -49,6 +49,18 @@ test('original weapon graphics and imported Temple level load through the adapte
  const bytes=new Uint8Array(await Bun.file(new URL('../browser/maps/temple.lev',import.meta.url)).arrayBuffer());m.FS.writeFile('/import.lev',bytes);m._liero_options(0,7,40,2,1);m._liero_loadout(0,0,40);m._liero_start(17,0);
  assert.equal(state(m)[3],7);for(let i=0;i<300;i++)m._liero_step_local(8,96,0,-1,16);assert.equal(state(m)[0],300);assert.ok(m._liero_render()>0);
 });
+test('self-kills from secondary fragments retain the weapon without changing gameplay',async()=>{
+ const m=await fresh(),bytes=new Uint8Array(await Bun.file(new URL('../browser/maps/temple.lev',import.meta.url)).arrayBuffer());m.FS.writeFile('/import.lev',bytes);
+ // Death frames and state hashes captured before the telemetry-only correction.
+ for(const [id,deathFrame,hash]of [[20,1367,448806626],[28,323,2504931467]]){
+  m._liero_options(0,99,20,0,1);for(let p=0;p<2;p++)for(let slot=0;slot<5;slot++)m._liero_loadout(p,slot,id);
+  m._liero_start(1,0);m._liero_participants(1);m._liero_begin_play();
+  for(let frame=0;frame<=deathFrame;frame++)m._liero_step(8,32,0,0,64,0);
+  const offset=m._liero_info()>>2;expect(m.HEAP32[offset+32]).toBe(1);expect(m.HEAP32[offset+33]).toBe(0);
+  expect(m._liero_weapon_id(m.HEAP32[offset+34])).toBe(id);expect(m.HEAP32[offset+35]).toBe(deathFrame);expect(m._liero_hash()>>>0).toBe(hash);
+ }
+});
+
 test('kill telemetry reports the lethal original weapon without changing simulation state',async()=>{
  const m=await fresh();m._liero_options(0,99,20,0,0);for(let p=0;p<2;p++)for(let slot=0;slot<5;slot++)m._liero_loadout(p,slot,1);m._liero_start(1,0);
  for(let f=0;f<1000;f++)m._liero_step(8,0,0,8,0,0);
