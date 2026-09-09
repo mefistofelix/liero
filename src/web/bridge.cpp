@@ -19,14 +19,23 @@ static std::vector<unsigned char> rgba(320*200*4);
 static int info[52], rightMode[2], loadout[2][5]={{1,8,15,22,29},{1,8,15,22,29}};
 // Presentation-only telemetry, using the original damage/death callbacks.
 static int deathSerial=0, deathCount[2]={}, deaths[2][4], fatalWeapon[2]={-1,-1};
+static bool networkMode=false, networkPrediction=false;
+static int confirmedDeaths[2][4], confirmedDeathCount[2], confirmedKills[2];
 struct BrowserStats : NormalStatsRecorder {
+    // Online snapshots need the small overlay counters, not an ever-growing
+    // native post-match heatmap/history. Local play retains the native recorder.
+    void preTick(Game& game) override {if(!networkMode)NormalStatsRecorder::preTick(game);}
+    void tick(Game& game) override {if(networkMode)++frame;else NormalStatsRecorder::tick(game);}
+    void damagePotential(Worm* by,WormWeapon* weapon,int hp) override {if(!networkMode)NormalStatsRecorder::damagePotential(by,weapon,hp);}
+    void shot(Worm* by,WormWeapon* weapon) override {if(!networkMode)NormalStatsRecorder::shot(by,weapon);}
+    void hit(Worm* by,WormWeapon* weapon,Worm* target) override {if(!networkMode)NormalStatsRecorder::hit(by,weapon,target);}
     void damageDealt(Worm* by,WormWeapon* weapon,Worm* target,int hp,bool hit) override {
-        NormalStatsRecorder::damageDealt(by,weapon,target,hp,hit);
+        if(!networkMode)NormalStatsRecorder::damageDealt(by,weapon,target,hp,hit);
         if(target&&target->health<=0&&hp>0)fatalWeapon[target->index]=weapon&&weapon->type?int(weapon->type-&gfx.common->weapons[0]):-1;
     }
-    void afterSpawn(Worm* worm) override {NormalStatsRecorder::afterSpawn(worm);fatalWeapon[worm->index]=-1;}
+    void afterSpawn(Worm* worm) override {if(!networkMode)NormalStatsRecorder::afterSpawn(worm);fatalWeapon[worm->index]=-1;}
     void afterDeath(Worm* worm) override {
-        NormalStatsRecorder::afterDeath(worm);++deathCount[worm->index];auto* event=deaths[worm->index];event[0]=++deathSerial;
+        if(!networkMode)NormalStatsRecorder::afterDeath(worm);++deathCount[worm->index];auto* event=deaths[worm->index];event[0]=++deathSerial;
         event[1]=worm->lastKilledByIdx;event[2]=fatalWeapon[worm->index];event[3]=frame;
     }
 };
@@ -208,6 +217,7 @@ EMSCRIPTEN_KEEPALIVE void liero_loadout_live(int player){
     selectAllowedWeapons();
 }
 EMSCRIPTEN_KEEPALIVE int liero_start(unsigned seed,int withBot){
+    networkMode=networkPrediction=false;
     participants=3;
     session.reset(); gfx.rand.seed(seed); gfx.settings.reset(new Settings);
     // Original replay packet format doesn't carry absolute aim.
@@ -335,7 +345,7 @@ EMSCRIPTEN_KEEPALIVE int* liero_info(){
     auto& weapon=session->game.worms[viewPlayer]->weapons[session->game.worms[viewPlayer]->currentWeapon];
     info[12]=weapon.ammo;info[13]=weapon.loadingLeft;
     info[14]=weapon.type-&gfx.common->weapons[0];info[15]=session->game.worms[viewPlayer]->visible;
-    info[16]=session->game.worms[0]->kills;info[17]=session->game.worms[1]->kills;
+    info[16]=networkPrediction?confirmedKills[0]:session->game.worms[0]->kills;info[17]=networkPrediction?confirmedKills[1]:session->game.worms[1]->kills;
     info[18]=session->game.worms[0]->timer;info[19]=session->game.worms[1]->timer;
     info[20]=session->game.worms[0]->ninjarope.length;info[21]=session->game.worms[0]->ninjarope.attached;
     info[22]=session->game.worms[1]->ninjarope.length;info[23]=session->game.worms[1]->ninjarope.attached;
@@ -346,9 +356,9 @@ EMSCRIPTEN_KEEPALIVE int* liero_info(){
         auto& selected=w.weapons[w.currentWeapon];
         info[46+p*3]=w.settings->health;info[47+p*3]=selected.loadingLeft;
         info[48+p*3]=selected.type->computedLoadingTime(*session->game.settings);
-        for(int i=0;i<4;++i)info[32+p*4+i]=deaths[p][i];}
+        for(int i=0;i<4;++i)info[32+p*4+i]=(networkPrediction?confirmedDeaths:deaths)[p][i];}
     info[40]=camera.x;info[41]=camera.y;info[42]=viewWidth;info[43]=viewHeight;
-    info[44]=deathCount[0];info[45]=deathCount[1];
+    info[44]=(networkPrediction?confirmedDeathCount:deathCount)[0];info[45]=(networkPrediction?confirmedDeathCount:deathCount)[1];
     return info;
 }
 EMSCRIPTEN_KEEPALIVE void liero_audio(){sfx.init();liero_record_audio();}
@@ -370,6 +380,7 @@ EMSCRIPTEN_KEEPALIVE unsigned liero_hash(){
     return hash;
 }
 }
+#include "netstate.hpp"
 int main(){
     try{SDL_Init(0);initKeys();precomputeTables();gfx.rand.seed(1);
         gfx.settings.reset(new Settings);gfx.setConfigPath("/");gfx.common.reset(new Common);

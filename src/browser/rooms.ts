@@ -1,6 +1,7 @@
 import type {Preferences} from './preferences.ts';
 import {RoomPresence,browserPresenceLease} from './room-presence.ts';
 import {localCountry} from './flags.ts';
+import {encodePacket,decodePacket,packetLane} from './net-packets.ts';
 export type Member={id:string;name:string;color:string;seat:number;country?:string};
 export type Room={id:string;hostEpoch?:number;name:string;region:string;country:string;private:boolean;phase:string;count:number;capacity:number;players?:number;settings:any;self:string;owner:string;members:Member[];chat:{seq:number;player:string;name:string;message:string;created_at:number}[]};
 const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
@@ -9,25 +10,40 @@ export async function api(path:string,method='GET',body?:unknown,invite='',ident
  const value=await response.json();if(!response.ok)throw Object.assign(new Error(value.error||`Request failed (${response.status}).`),{status:response.status});return value;
 }
 type Packet=Record<string,any>;
-class Wire{
+export class Wire{
  pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
- channel?:RTCDataChannel;pending:RTCIceCandidateInit[]=[];queue:string[]=[];
+ channels:RTCDataChannel[]=[];pending:RTCIceCandidateInit[]=[];
+ private queues:(string|Uint8Array)[][]=[[],[],[]];private queuedBytes=0;private timer?:ReturnType<typeof setTimeout>;private opened=false;private dead=false;
  constructor(private signal:(data:Packet)=>Promise<void>,private message:(data:Packet)=>void,private ready:()=>void,private closed:()=>void){
   this.pc.onicecandidate=e=>{if(e.candidate)this.signal({type:'candidate',candidate:e.candidate.toJSON()}).catch(()=>this.close());};
-  this.pc.ondatachannel=e=>this.attach(e.channel);
-  this.pc.onconnectionstatechange=()=>{if(['failed','closed'].includes(this.pc.connectionState))this.closed();};
+  this.attach(this.pc.createDataChannel('control',{negotiated:true,id:0,ordered:true}),0);
+  this.attach(this.pc.createDataChannel('actions',{negotiated:true,id:1,ordered:false}),1);
+  this.attach(this.pc.createDataChannel('progress',{negotiated:true,id:2,ordered:false,maxRetransmits:0}),2);
+  this.pc.onconnectionstatechange=()=>{if(['failed','closed'].includes(this.pc.connectionState))this.close();};
  }
- attach(channel:RTCDataChannel){this.channel=channel;channel.bufferedAmountLowThreshold=64*1024;channel.onbufferedamountlow=()=>this.flush();channel.onopen=()=>{this.flush();this.ready();};channel.onclose=()=>{this.pc.close();this.closed();};channel.onmessage=e=>{try{if(typeof e.data!=='string'||e.data.length>60000)return;this.message(JSON.parse(e.data));}catch{this.close();}};}
- async offer(probe=false){this.attach(this.pc.createDataChannel('liero',{ordered:true}));await this.pc.setLocalDescription(await this.pc.createOffer());await this.signal({type:probe?'probe-offer':'offer',sdp:this.pc.localDescription!.sdp});}
+ attach(channel:RTCDataChannel,lane:number){this.channels[lane]=channel;channel.binaryType='arraybuffer';channel.bufferedAmountLowThreshold=16*1024;channel.onbufferedamountlow=()=>this.flush();channel.onopen=()=>{this.flush();if(!this.opened&&this.channels.length===3&&this.channels.every(c=>c.readyState==='open')){this.opened=true;this.ready();}};channel.onclose=()=>this.close();channel.onmessage=e=>{try{if(typeof e.data!=='string'&&!(e.data instanceof ArrayBuffer))return;this.message(decodePacket(e.data));}catch{this.close();}};}
+ async offer(probe=false){await this.pc.setLocalDescription(await this.pc.createOffer());await this.signal({type:probe?'probe-offer':'offer',sdp:this.pc.localDescription!.sdp});}
  async receive(data:Packet){
   if(data.type==='candidate'){if(this.pc.remoteDescription)await this.pc.addIceCandidate(data.candidate);else this.pending.push(data.candidate);return;}
   await this.pc.setRemoteDescription({type:data.type==='answer'?'answer':'offer',sdp:data.sdp});
   for(const c of this.pending)await this.pc.addIceCandidate(c);this.pending=[];
   if(data.type!=='answer'){await this.pc.setLocalDescription(await this.pc.createAnswer());await this.signal({type:'answer',sdp:this.pc.localDescription!.sdp});}
  }
- send(packet:Packet){const data=JSON.stringify(packet);if(data.length>60000)throw new Error('Packet too large');if(this.queue.length>2000){this.close();return;}this.queue.push(data);this.flush();}
- flush(){while(this.channel?.readyState==='open'&&this.channel.bufferedAmount<128*1024&&this.queue.length)this.channel.send(this.queue.shift()!);}
- close(){this.queue=[];this.pc.close();}
+ send(packet:Packet){
+  if(this.dead)return;const data=encodePacket(packet),lane=packetLane(packet);if(data.length>60000)throw new Error('Packet too large');
+  if(lane===2){for(const previous of this.queues[2])this.queuedBytes-=previous.length;this.queues[2]=[];}
+  if(this.queuedBytes+data.length>8*1024*1024){this.close();return;}
+  this.queues[lane].push(data);this.queuedBytes+=data.length;this.flush();
+ }
+ flush(){
+  if(this.dead)return;clearTimeout(this.timer);this.timer=undefined;
+  // Channels share congestion control. Prioritize actions and pace bulk control
+  // data instead of filling SCTP with an entire checkpoint in one call.
+  for(const lane of [1,2,0]){const channel=this.channels[lane];let budget=lane===0?16384:32768;
+   while(channel?.readyState==='open'&&channel.bufferedAmount<32768&&this.queues[lane].length&&budget>0){const data=this.queues[lane].shift()!;this.queuedBytes-=data.length;budget-=data.length;channel.send(data as any);}}
+  if(this.queuedBytes)this.timer=setTimeout(()=>this.flush(),16);
+ }
+ close(){if(this.dead)return;this.dead=true;clearTimeout(this.timer);this.queues=[[],[],[]];this.queuedBytes=0;this.pc.close();this.closed();}
 }
 export class RoomClient{
  room?:Room;invite='';id='';wires=new Map<string,Wire>();pings=new Map<string,number>();

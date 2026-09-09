@@ -1,5 +1,21 @@
 # Local milestone validation — 2026-09-09
 
+## Protocol 6
+
+- `bun run engine`, `bun run engine:wasm` and `bun run test`: 67 passing tests.
+- Complete snapshot save/restore, JS/WASM exchange, ropes anchored to worms,
+  delayed/reordered/duplicate input, dropped progress, late spectators, confirmed
+  state divergence recovery and one-shot Stop are tested with real engines.
+- WebRTC channel/queue checks use a fake RTCPeerConnection; they do not establish
+  a real protocol-6 browser handshake. One local browser started and played a room
+  without console errors. The automation URL policy blocked opening the private
+  invite in another tab; multi-tab testing remains incomplete.
+- `bun run netcode:audit` completes 2,100 host ticks with up to 400 ms synthetic
+  RTT and no resync errors. It includes a continuous aim/fire/rope workload.
+  See NETCODE.md for payload/CPU measurements and their scope.
+
+## Earlier milestones (previous network protocol)
+
 - Bun 1.4.2 on Windows. `bun run dev` serves the game at port 3000.
 - `bun run engine` and `bun run engine:wasm` build successfully through Bun tasks,
   using Emscripten 6.0.9, Python/Clang, CMake and Ninja. No PowerShell build wrapper.

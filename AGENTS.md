@@ -169,14 +169,18 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   Any remaining player continues in a new solo round. Spectator clicks cycle players, then free camera.
   Drag right mouse to pan free camera; configured WASD also works during live spectating.
 - Host owns room rules/rotation. Guests inspect room rules and edit their own profile/loadout.
-  Rule changes apply on a synchronized simulation tick and are retained in spectator
-  history. In-progress reloads preserve their completion fraction at the new speed.
-  Keep initial round rules in the join setup; replay timed changes from history.
-- WebRTC reliable ordered lockstep at 70 Hz, six ticks of input buffering. D1 handles
-  directory, membership, chat and SDP/ICE only. It never carries per-frame simulation.
-- Spectator host coordinates inputs from both remote seats. Late viewers receive
-  exact map bytes + bounded input history. No prediction, rollback, TURN service,
-  headless host is currently implemented. Host succession restarts the current level;
+  Rule/loadout changes are host-ordered events applied on a simulation tick and
+  included in current-state checkpoints. Reloads preserve their completion fraction.
+- Protocol 6: host-ordered input changes at the original 70 Hz, with two ticks of
+  input delay, a confirmed world and a predicted view bounded to 14 ticks ahead.
+  The host advances without waiting for a packet from every player each tick.
+  Reliable ordered control, reliable unordered actions and unreliable unordered
+  progress use three negotiated WebRTC channels. D1 is directory/signaling only.
+- Late viewers receive compressed original map bytes and a compressed current
+  checkpoint with altered terrain, live objects, RNG, rope anchors and pending actions.
+  Complete confirmed-state hashes trigger bounded checkpoint recovery on divergence.
+  No full-round replay history. Audio and kill telemetry follow confirmed simulation.
+- No TURN service or headless host. Host succession restarts the current level;
   it does not preserve the exact simulation frame. Report these limits honestly.
 
 ## Repository organization
@@ -195,7 +199,7 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
 - Named loadout presets are saved separately for each local player. Selecting, editing
   or dragging slots applies immediately; the compact weapon list also supports dragging weapons into slots.
   The Weapons menu uses the profile that opened it, with one named Loadout selector; Alt+Left/Right also reorders slots. Online
-  changes are host-committed with frame history (protocol 5). Retain ammunition and
+  changes are host-committed timeline events (protocol 6). Retain ammunition and
   reload progress of kept weapons; newly added weapons start their normal reload.
 - Split screen shows a second profile toolbar button; player 1 remains the online
   profile. Close Profile to save and apply, without a Save button or live typing updates.
@@ -235,9 +239,12 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
 - Keep the source weapon on secondary explosion fragments for kill-feed telemetry, including self-kills. The player-list toolbar icon highlights while its panel is open.
 - Mouse aim retains subpixel pointer and worm coordinates, reprojects after canvas resizing, and selects the nearest normalized direction from the original 128-entry table. Use the original shot origin (one pixel above the worm) for fire/default aim and worm center for rope/dig-only input; simultaneous fire takes precedence. Never change projectile physics or native angular resolution for mouse precision.
 
-## Next netcode revision (evaluated, not implemented)
+## Netcode architecture
 - See docs/NETCODE.md for the audited protocol-5 baseline, public WebLiero bundle
-  evidence and the required validation. The current lockstep limits above still apply.
+  evidence, protocol-6 implementation, measurements and validation limits.
+- Alpha releases do not require backward compatibility. The user explicitly accepts
+  losing running games/state and requiring everyone to reload after an update.
+  Do not retain protocol-5 transport, history replay or migration shims.
 - Transmit tick-indexed changes of input intent with compact binary encoding,
   reliable event sequencing and low-rate progress/acknowledgments. Do not send
   per-frame mouse coordinates, worm positions or redundant projectile events.
@@ -248,5 +255,5 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
   current-state checkpoint for joining, including altered terrain and active objects.
   The original replay serializer and postClone are not complete rollback adapters.
 - Rope can anchor to another worm and apply forces to both. Restore the coupled
-  simulation from the first affected tick, not isolated remote-player positions.
+  simulation from the latest confirmed baseline, not isolated remote-player positions.
   Keep original 70 Hz physics/RNG/order; make netcode changes at adapter boundaries.

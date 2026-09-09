@@ -84,9 +84,15 @@ are included, so running the game does not require a compiler.
 | Tasks and tests | `src/tasks` and `src/tests` |
 
 D1 stores the room directory, membership, chat and WebRTC signaling. Simulation
-and per-frame inputs stay in the browsers; no dedicated game server is required.
+and gameplay inputs stay in the browsers; no dedicated game server is required.
 Local SQLite implements the D1 contract for development. Profile preferences,
 imported maps and recordings remain on your device.
+
+The host orders compact input changes; each peer runs the original simulation.
+Clients predict ahead and reconcile against confirmed actions. Mid-round joins
+receive a compressed current-world checkpoint, including destroyed terrain and
+active ropes/projectiles. A state mismatch requests a fresh checkpoint automatically.
+See [netcode architecture and measurements](docs/NETCODE.md).
 
 ## Build and verify
 
@@ -95,6 +101,7 @@ bun run test          # Gameplay, input, room, network, hosting and map checks
 bun run build         # Production Worker, static assets and D1 migrations
 bun run engine        # Recompile the original engine to JavaScript
 bun run engine:wasm   # Optional WASM comparator for parity tests
+bun run netcode:audit # Synthetic latency, bandwidth and replay-cost diagnostic
 ```
 
 Recompiling C++ requires Emscripten, Python/Clang, CMake and Ninja. Bun tasks discover
@@ -106,8 +113,9 @@ Asset tasks: `bun run assets:font`, `bun run assets:icons`, `bun run assets:maps
 
 ## Current limits
 
-The host must keep its game tab active. Networking uses reliable ordered lockstep;
-prediction, rollback and a TURN relay are not implemented. When the host leaves or expires,
+The host must keep its game tab active. Prediction is bounded to 200 ms and audio
+follows confirmed actions; high latency can still cause corrections or waiting.
+There is no TURN relay. When the host leaves or expires,
 the room transfers to the remaining member with the lowest recorded RTT to the old host
 (unknown pings last), reconnects and restarts the current level. It does not resume the
 exact frame. Empty rooms are removed; crash detection can take up to 120 seconds. Some
@@ -116,13 +124,16 @@ determinism and selected original behaviors, not exhaustive 1:1 parity or every
 internet network configuration. Clearing browser storage removes local preferences,
 imported maps and recordings.
 
+This is an alpha. Network protocol changes require everyone to reload; running
+matches and old client compatibility are not preserved.
+
 ## Source and documentation
 
 Development uses a single `master` branch in [mefistofelix/liero](https://github.com/mefistofelix/liero).
 
 - [Stack and toolchain](docs/stack.md)
 - [Porting decisions and fidelity limits](docs/PORTING.md)
-- [Netcode audit and next architecture](docs/NETCODE.md)
+- [Netcode architecture and measurements](docs/NETCODE.md)
 - [Validation](docs/VALIDATION.md)
 - [Map formats and provenance](docs/MAPS.md)
 - [Original native build instructions](docs/NATIVE.md)

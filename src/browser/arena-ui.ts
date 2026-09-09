@@ -67,7 +67,9 @@ export class ArenaUI{
   b.querySelector('path')!.setAttribute('d',active?'M6 6h12v12H6Z':'m8 4 12 8-12 8Z');
  }
  frame(state:Int32Array){
-  this.state=state.slice();if(state[0]<this.cycle)this.reset();this.cycle=state[0];const c=this.c,seat=c.seat(),now=performance.now();
+  // Online prediction/checkpoint recovery can move the displayed tick backwards.
+  // Explicit round transitions already call reset; never replay old kill events.
+  this.state=state.slice();if(state[0]<this.cycle&&!this.c.room.id)this.reset();this.cycle=state[0];const c=this.c,seat=c.seat(),now=performance.now();
   if(!c.room.id&&c.playing()&&now-this.lastPanel>500){this.lastPanel=now;this.room({id:'local',self:'local0',owner:'local0',phase:'playing',members:c.names().map((name,p)=>({id:'local'+p,name,color:p?c.color2():c.color(),seat:p})),chat:[]} as Room,()=>0);}
   const canvas=el<HTMLCanvasElement>('game'),rect=canvas.getBoundingClientRect(),stage=el('stage').getBoundingClientRect();
   for(let p=0;p<2;p++){

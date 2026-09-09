@@ -1,35 +1,203 @@
-# Netcode audit and next architecture
+# Netcode architecture and measurements
 
-Audited 2026-09-09 against `985cded9f3af495bf4e41e1cf121bbe8d02967f9`, protocol 5.
-This document records the evaluation and the intended next revision. **Prediction,
-rollback, binary event transport and mid-round checkpoints are not implemented.**
-The accompanying `bun run netcode:audit` measures the current implementation.
+Protocol 6, implemented 2026-09-09. The earlier audit used protocol 5 at
+`985cded9f3af495bf4e41e1cf121bbe8d02967f9`. Its measurements are retained below.
+The alpha does not support older clients: everyone must reload after this update.
 
-## Current behavior
+## Current implementation
 
-`src/browser/netgame.ts` sends tick-indexed `[buttons, angle, wheel]` commands.
-It already avoids sending mouse coordinates, worm positions, velocities and
-projectile states each tick. Both peers run the original engine at 70 Hz.
+The host orders changes of player input and advances the original C++ simulation
+at 70 Hz without waiting for an unchanged input packet from every occupied seat.
+Each guest keeps a confirmed world and a bounded predicted view. Joining and
+resynchronizing use the current world, including destroyed terrain and active
+objects. D1 carries directory, membership, chat and signaling; game data stays
+on WebRTC between browsers. There is no dedicated simulation server.
 
-However, every guest sends a JSON input packet every tick, even when unchanged.
-The host waits for each occupied seat's input and broadcasts another JSON packet
-for every committed tick. Six ticks of buffering do not provide prediction:
-clients wait for host commits before advancing. Higher latency or interrupted
-delivery can therefore stall play. A spectator host has the same dependency on
-its remote players.
+This follows the architecture observed in WebLiero, not a translation of its
+proprietary engine. No `src/game` physics source changed for protocol 6.
 
-Every 70 ticks, peers compare a hash of terrain and major worm fields. A mismatch
-stops the round; it does not trigger automatic repair. This hash omits some object
-and RNG state, so matching hashes are not proof of complete state equality.
+### Input and ordering
 
-A late spectator receives the initial seed, exact map bytes, initial rules and
-the complete input/rule/loadout history since round start. It then replays that
-history. The one-hour round bound limits memory growth but does not make joining
-independent of elapsed match time. Host migration restarts the current level.
+`src/browser/netgame.ts` sends `[buttons, angle, wheel]` only when the held mask
+or original 7-bit aim direction changes, or a wheel/suicide pulse occurs.
+A fixed held command costs no repeated input packets. Mouse coordinates, worm
+positions, velocities, shots and impacts are not streamed. Holding fire already
+determines shots through the native weapon, ammunition, reload and RNG state.
+Aim changes still matter while firing or steering guided weapons.
 
-`src/browser/rooms.ts` uses one reliable, ordered WebRTC data channel for inputs,
-commits, chat and bulk setup/history. D1 carries directory, membership and
-signaling data; it never carries simulation frames.
+The contextual right-click adapter decides digging or rope from the terrain.
+Press/release edges, simultaneous mouse buttons, shortening/extension and wheel
+pulses remain distinct. Wheel and suicide are consumed once, not held during
+prediction. Menu opening and focus loss release held input.
+
+Each player proposes a tick and monotonically increasing sequence. The host
+validates membership/seat, round identity, ranges and sequence, reorders reliable
+messages, then assigns its global event serial. Late input starts at the next
+uncommitted host tick; future input is bounded to 120 ticks. Consecutive events
+for a seat get distinct ticks, preserving rapid scrolls and button edges. The
+host never rolls its own timeline backward to accept a late command.
+Rules/loadout changes use the same authoritative event ordering.
+
+### Confirmation and prediction
+
+- Input delay: 2 ticks (about 29 ms).
+- Progress: every 7 ticks (10 Hz), containing confirmed tick and event serial.
+- Canonical checkpoint hash: every 70 ticks (1 Hz), plus final progress.
+- Predicted view: at most 14 ticks (200 ms) beyond the confirmed baseline.
+- Catch-up per confirmation: at most 140 ticks; a larger gap requests a checkpoint.
+- Pending event/reordering limits: 2,048 entries, with tighter per-seat sequence
+  and future-tick bounds. Round duration remains capped at 252,000 ticks (one hour).
+
+A progress message is usable only after all referenced action serials have
+arrived. Clients restore the confirmed baseline, apply the newly confirmed
+interval, check its hash when present, and save that baseline. They then replay
+the bounded prediction using known authoritative actions, held remote inputs
+and their own unacknowledged actions. Prediction advances incrementally between
+confirmations; an authoritative event that changes an already predicted interval
+also rebuilds that view. This is a confirmed-world/predicted-world design,
+rather than a checkpoint for every elapsed tick or independent entity correction.
+
+A worm is not an independent rollback unit. In `src/game/ninjarope.cpp`, a rope
+attached to another worm changes both worms' velocities. Explosions, terrain and
+shared RNG introduce additional dependencies. Restoring only a remote position
+would corrupt the original behavior. Restore the coupled world for the bounded
+interval; do not alter collision positions to smooth a correction.
+
+Audio runs only during confirmed simulation. Speculative stepping uses
+`NullSoundPlayer`; kill/death telemetry also remains confirmed, so replay does
+not repeat sounds or feed entries. This trades some audible delay for correct
+one-shot effects. No visual interpolation of corrections is implemented.
+
+The save/restore/replay requirements are consistent with
+[GGPO](https://www.ggpo.net/) and the prediction, input-delay and CPU tradeoffs
+described by [SnapNet](https://snapnet.dev/blog/netcode-architectures-part-2-rollback/).
+See also [Deterministic Lockstep](https://gafferongames.com/post/deterministic_lockstep/)
+for tick-indexed input and reducing redundant transmissions.
+
+### Complete current-world checkpoint
+
+`src/web/netstate.hpp`, included by the browser bridge, serializes explicit
+little-endian fields without raw pointers or struct padding:
+
+- Exact current indexed terrain, materials, palette and dimensions.
+- Both worms, positions/velocities, respawn and weapon timers, ammunition,
+  control edges, aim, rope position/velocity/length and anchor worm index.
+- Active weapon, particle, explosion and bonus object lists, including slot
+  occupancy and allocation/iteration order. Owner/weapon references are remapped.
+- Simulation RNGs, canonical viewports and their RNGs, mode state, settings,
+  input-adapter edges and confirmed death telemetry.
+
+Names, colors and the user's presentation camera stay local. Online play has no
+AI; the adapter skips the original stats recorder's unbounded heatmaps/history
+while retaining the counters needed by the interface. Inactive uninitialized
+startup storage is canonicalized, never included as random padding in a hash.
+
+The original replay archive omits live object lists and other required fields;
+`Game::postClone` also leaves shared references. Neither is reused as a complete
+checkpoint. A malformed incoming checkpoint is bounded and rejected, restoring
+the prior world atomically. The canonical hash covers these serialized fields,
+not raw engine memory; it is a consistency check, not an anti-cheat proof.
+
+A join receives the compressed original map (retained for round restarts/host
+succession), then a compressed current-world checkpoint and pending future
+actions. Actions arriving during transfer are buffered and merged by serial.
+There is no replay from the beginning of the match. Checkpoints are bounded to
+2 MiB before decompression and after inflation; map inputs remain bounded to
+1 MiB. Native `CompressionStream('deflate')` and `DecompressionStream` require
+no extra compression dependency. Transfers use binary chunks of at most 8 KiB.
+
+A confirmed-state mismatch requests a new host checkpoint, with per-peer rate
+limiting, incomplete-transfer timeout and a six-attempt recovery limit.
+Successful recovery clears the failure count. The retry limit produces a visible
+rejoin message if recovery cannot complete; it does not loop without a bound.
+
+### WebRTC transport
+
+`src/browser/rooms.ts` negotiates three channels on both peers:
+
+| ID | Data | Delivery |
+| --- | --- | --- |
+| 0 | Setup, maps, checkpoints, chat, final progress | Reliable ordered |
+| 1 | Player proposals and host-assigned actions/configuration | Reliable unordered |
+| 2 | Supersedable tick/event-count progress | Unreliable unordered, maxRetransmits 0 |
+
+Actions have explicit sequence ordering; releases and wheel pulses retain WebRTC
+reliability. Ordinary progress can be dropped/replaced because later progress
+supersedes it. Round-ending progress uses the reliable channel.
+
+`net-packets.ts` encodes input proposals in 28 bytes, host input events in
+33 bytes and progress in 30 bytes, including the round UUID and sequencing.
+Map/checkpoint chunks have a 25-byte header. Infrequent configuration/metadata
+uses bounded JSON. There is no protocol-5 fallback or legacy history transfer.
+
+All channels share SCTP congestion control. The sender prioritizes actions and
+progress, checks `bufferedAmount`, limits bulk work per flush and caps queued
+data at 8 MiB. It does not imply independent bandwidth for each channel.
+See the [WebRTC specification](https://www.w3.org/TR/webrtc/) and
+[RTCDataChannel buffering](https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmount).
+
+## Protocol-6 measurements
+
+Run `bun run netcode:audit` (or `.\\bun.exe run netcode:audit` on Windows).
+It runs the actual compiled JS engine, `NetworkRound`, binary codec and native
+compression for 2,100 wall ticks (30 seconds). The movement scenarios alternate
+horizontal direction with fixed aim and no firing. The combat scenario changes
+aim every tick while holding fire, using rope/W and periodically scrolling.
+
+| Synthetic scenario | Host ticks | Guest confirmed / predicted | Host bytes/s per guest | Guest bytes/s | Join checkpoint bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| No added delay | 2,100 | 2,093 / 2,100 | 379 | 39 | 62,027 |
+| 86 ms RTT | 2,100 | 2,093 / 2,101 | 379 | 39 | 62,028 |
+| 200 ms RTT | 2,100 | 2,093 / 2,101 | 379 | 39 | 62,028 |
+| 400 ms RTT | 2,100 | 2,086 / 2,094 | 379 | 39 | 62,027 |
+| 86 ms + 143 ms action delay | 2,100 | 2,093 / 2,101 | 379 | 39 | 62,028 |
+| 200 ms + continuous aim/fire/rope | 2,100 | 2,093 / 2,101 | 4,912 | 1,960 | 68,315 |
+
+All scenarios completed without resyncs or reported errors. Movement-only guests
+send 42 packets for 42 changes, versus 2,099 packets in the earlier baseline.
+Continuously changing aim correctly still sends 70 input proposals per second.
+The displayed prediction can lead or lag the host; it is not a confirmed result.
+
+On this Windows/Bun run, guest advance p99 was 0.76–0.82 ms for movement and
+2.21 ms for combat (maximum 3.80 ms). These numbers include replay/checkpoint
+work, but not rendering. The 200 ms combat scenario executed 23,024 predicted
+ticks, including 20,923 replayed ticks: prediction is bounded, not free.
+
+Payload measurements include our binary framing and, in the join column,
+compressed checkpoint metadata/chunks. They exclude SCTP/DTLS/IP overhead, D1,
+original map transfer, fan-out to other viewers and real congestion control.
+No-added-delay messages arrive no earlier than the next diagnostic iteration.
+These are synthetic measurements, not an internet or browser/device guarantee.
+A complete checkpoint may be larger than the old history of a very short round;
+its size and recovery work do not grow with the elapsed round duration.
+
+## Validation and remaining limits
+
+`bun run test`: 67 passing tests on this revision, including:
+
+- 1,400 native ticks with repeated complete restore between fresh engines,
+  live rules/loadouts, active objects and exact subsequent byte equality.
+- A rope anchored to the other worm, followed by pulling, release, rethrow and death.
+- Checkpoint exchange between compiled JS and WASM with continuing simulation.
+- Delayed, reordered and duplicated actions, dropped progress, one-shot inputs,
+  spectator hosts and a temporarily stalled guest.
+- Mid-round snapshot joins, confirmed-hash comparison, deliberately injected
+  divergence and automatic checkpoint recovery.
+- Negotiated channel configuration, binary encoding, queue priority/backpressure,
+  progress supersession, reliable final progress and idempotent connection close.
+
+The real local browser started a private room and played without console errors.
+Opening its invite in a second browser tab was blocked by the automation URL
+policy, so protocol-6 multi-tab WebRTC handshake/gameplay verification is
+incomplete. The transport test uses a fake RTCPeerConnection; the simulation and
+serialization tests use real compiled engines. Earlier browser checks in
+VALIDATION.md concern the previous protocol and do not close this gap.
+
+The host must remain active; browser background throttling still applies.
+No TURN, headless host, cheat-resistant server or visual correction smoothing
+is included. Host succession preserves the room but restarts the current level.
+High latency can exceed the prediction window and cause waiting or corrections.
+These tests do not establish exhaustive original-game parity.
 
 ## What is verifiable in WebLiero
 
@@ -53,10 +221,9 @@ establish automatic per-entity repair on checksum mismatch. Terrain prediction
 copies its pixel buffer (`Z.Of`). Keep our original 70 Hz; do not copy its 60 Hz.
 The proprietary bundle remains an external research reference, not vendored code.
 
-## Reproducible baseline
+## Previous protocol-5 baseline
 
-Run `bun run netcode:audit` (or `.\bun.exe run netcode:audit` on Windows).
-The diagnostic runs the actual compiled JS engine and `NetworkRound`, with two
+Captured at commit `581660f`; that revision of `bun run netcode:audit` runs the actual compiled JS engine and `NetworkRound`, with two
 players and synthetic ordered delivery for 2,100 wall ticks (30 seconds). Players
 alternate horizontal movement, with fixed aim and no firing. It counts UTF-8 JSON
 payload bytes before transport.
@@ -85,139 +252,3 @@ packet loss/retransmission overhead, encryption, D1 traffic or CPU contention.
 Real latency/bandwidth claims require browser measurements under controlled
 network impairment. No hash errors occurred in these runs, subject to the hash's
 coverage limits above.
-
-## Decision for the next revision
-
-Use compact changes of player intent, a host-ordered event timeline, a confirmed
-simulation state and a bounded predicted view. Preserve the original C++ step,
-integer arithmetic, RNG consumption, terrain, collisions, weapons and rope.
-The host remains a player's browser; this requires no dedicated simulation server.
-
-### Minimal commands
-
-| Situation | Information that needs to change |
-| --- | --- |
-| Start/stop left, right, up or down; hold/release fire | New control bit mask |
-| Aim enters another original direction | New 7-bit angle, including while firing/steering |
-| Contextual right click pressed/released | Input edge and current angle; original adapter decides dig or rope |
-| Jump/release rope; shorten/extend rope | Corresponding control transition |
-| Scroll/select a weapon | One-shot slot-change action |
-| Change loadout or room rules | Validated, host-ordered configuration event |
-
-Holding a command should not resend its unchanged contents every simulation tick.
-The receiver keeps the latest held state. Releases must be delivered too, including
-focus loss and menu opening. Wheel pulses are one-shot events: two identical
-successive scrolls must not collapse into one, and a held prediction must not
-repeat a scroll or suicide every tick. Preserve the current button-edge behavior.
-
-Do not send a separate projectile or impact message for every shot. The selected
-weapon, ammunition, reload timer and deterministic RNG already tell the engine
-what holding fire produces. A weapon ID is unnecessary on every shot once slot
-and loadout changes are ordered. Aiming still changes between shots and may
-affect guided weapons, so sending the angle only when fire starts is insufficient.
-
-Buttons plus angle currently fit in 16 bits; a wheel pulse needs two more bits.
-These are input payload sizes, **not complete packet sizes**. Round identity,
-tick, sequence/acknowledgment and transport framing remain necessary. Encode
-binary, coalesce commands sampled for the same tick, and bound all ranges/queues.
-Do not add an extra debounce delay to input edges just to save bytes.
-
-Send progress/acknowledgment messages at a measured lower rate, even when no
-commands change. They establish the confirmed tick and that no preceding event
-is missing. Silence alone cannot distinguish held input from packet loss.
-
-### Prediction and reconciliation
-
-The host orders and validates commands and advances its canonical simulation
-without waiting for every player to send an unchanged mask. Clients predict their
-own new input and retain the last known held remote input. Reconcile when an
-authoritative event differs in value, tick or order from the prediction; do not
-wait for a periodic hash to discover an already-known input discrepancy.
-
-Map client-proposed ticks into a bounded host window, reject invalid actor/round
-identities, and deduplicate by action sequence. A command arriving after its
-requested tick takes effect at the next uncommitted host tick; return that actual
-tick and order to the sender. The predicted client then reconciles its timing.
-Do not retroactively rewrite host history or trust arbitrary future timestamps.
-
-Use the latest confirmed checkpoint preceding the first affected tick, then replay
-only the subsequent affected interval. If the predicted event stream matched,
-promote it without unnecessary replay. Keep prediction and catch-up work bounded;
-measure the engine's worst-case cost before selecting delay/window limits. Beyond
-that window, temporarily wait or resynchronize instead of simulating unbounded
-speculation. No physics change or lower simulation rate is justified by transport.
-
-**A worm is not an independent rollback unit.** In
-`src/game/ninjarope.cpp`, attachment to another worm modifies both the anchor's
-and owner's velocity. A late movement/release can change both trajectories,
-subsequent hits and terrain destruction. Explosions and shared RNG create further
-dependencies. Restore the coupled game state for that short time interval;
-restoring only another player's position cannot preserve original behavior.
-Render smoothing can be local to a label/camera, but must not alter authoritative
-collision positions.
-
-This follows the deterministic save/restore/replay requirements described by
-[GGPO](https://www.ggpo.net/) and the prediction, input-delay and CPU-budget
-tradeoffs discussed by [SnapNet](https://snapnet.dev/blog/netcode-architectures-part-2-rollback/).
-Tick-indexed inputs, acknowledgment and compression of repeated inputs are also
-described in [Deterministic Lockstep](https://gafferongames.com/post/deterministic_lockstep/).
-
-### Complete checkpoint adapter
-
-Add a versioned, pointer-free serializer and exact in-memory save/restore at the
-browser adapter boundary. A checkpoint must include:
-
-- Current level pixels, materials/palette and dimensions.
-- Both worms, all timers, weapon slots/ammunition/reload progress, control edges,
-  rope position/velocity/length and its anchor as a stable worm index.
-- Active projectiles, fragments, explosions, bonuses and allocation/iteration
-  order, with ownership references remapped to restored worm/weapon objects.
-- Every simulation RNG, tick counter, mode/score state and synchronized rules.
-- Browser input state (`rightMode`, `rightDown`, `digPulse`), pending one-shot
-  input and the confirmed event sequence.
-
-The original `replay.cpp` game archive omits active object lists and other state
-needed for arbitrary mid-round restore. `Game::postClone` copies worm objects but
-leaves settings and some cross-object references shared; its existing uses are
-not proof of rollback isolation. Do not reuse either unchanged as a complete
-checkpoint. Handle presentation telemetry/audio separately so replay does not
-duplicate beeps, shots, kills, chat or recording events.
-
-At join, serialize a confirmed current checkpoint, including already-dug terrain,
-and retain a short event tail while it transfers. Validate bounds/version before
-restoring, then replay only that tail and enter live spectating. Keep a bounded
-history ring rather than the whole match. Periodic complete canonical-state
-hashes at the same confirmed tick should request a fresh host checkpoint on real
-divergence, with retry/rate limits. Never hash raw pointers or uninitialized bytes.
-
-### Transport
-
-Keep reliable ordered control/setup and paced checkpoint transfer separate from
-small action messages. Reliable unordered action delivery can use explicit
-sequence/tick ordering, as observed in WebLiero; unreliable unordered progress
-messages can be superseded. If actions themselves become unreliable, add bounded
-acknowledged retransmission/redundancy first. Lost releases or missing wheel
-pulses cannot simply be ignored.
-
-Separate channels still share an SCTP association and congestion budget; they
-do not remove every possible blocking effect. Prioritize/pause bulk chunks under
-backpressure and bound buffered data. Account for SCTP/DTLS/IP and fan-out to all
-viewers when measuring traffic, not just application bytes. See the
-[WebRTC specification](https://www.w3.org/TR/webrtc/) and
-[RTCDataChannel buffering](https://developer.mozilla.org/en-US/docs/Web/API/RTCDataChannel/bufferedAmount).
-
-## Required validation before replacing protocol 5
-
-1. Save/restore produces the same subsequent state as uninterrupted simulation,
-   including JS/WASM comparison, digging, explosions, RNG, live rules and loadouts.
-2. A rope attached to the other player preserves both velocities and its anchor
-   after restoration; test release, rethrow, death and respawn during prediction.
-3. Lost, duplicated, delayed and reordered events never lose releases or repeat
-   one-shot actions. Include simultaneous fire/right click/scroll and held W.
-4. A mid-round join with altered terrain and live projectiles converges to the
-   host; transfer/replay work is bounded independently of round age.
-5. Confirmed hashes match after prediction correction. Inject a real mismatch
-   and verify bounded automatic checkpoint recovery.
-6. Measure response latency, CPU replay budget, bytes, packet rate and buffered
-   data under realistic RTT/jitter/loss, with a spectator host and late joiners.
-   Require useful improvement over this baseline before claiming optimization.

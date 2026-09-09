@@ -20,6 +20,9 @@ export type EngineModule = {
   _liero_step(b0: number,a0: number,w0: number,b1: number,a1: number,w1: number): number;
   _liero_render(): number; _liero_aim(player: number,x: number,y: number,buttons: number): number;
   _liero_info(): number; _liero_hash(): number; _liero_audio(): void;
+  _liero_net_enable():void;_liero_net_save(slot:number):number;_liero_net_restore(slot:number):number;
+  _liero_net_data(slot:number):number;_liero_net_buffer():number;_liero_net_load(length:number):number;
+  _liero_net_hash():number;_liero_net_prediction(enabled:number):void;
 };
 let modulePromise: Promise<EngineModule> | undefined;
 export function loadEngine(): Promise<EngineModule> {
@@ -118,6 +121,7 @@ export class LocalGame {
     this.module._liero_start(seed,(localTwo||network)?0:1);
     if(network)this.module._liero_participants(network.participants);
     this.module._liero_begin_play();
+    network?.initialize();
     this.active=true;this.paused=false;this.resize();
     this.canvas.focus(); this.raf=requestAnimationFrame(this.frame);
   }
@@ -156,7 +160,6 @@ export class LocalGame {
     const menu=!!document.querySelector('dialog[open],#chat-compose:not([hidden])');
     if(this.paused){this.clear();this.raf=requestAnimationFrame(this.frame);return;}
     if(menu){this.keys.clear();this.pendingKeys.clear();this.buttons=0;this.pendingButtons=0;this.wheel=0;}
-    this.network?.catchUp();
     if(this.pointerClient){const rect=this.canvas.getBoundingClientRect();if(rect.width&&rect.height)this.mouse={x:(this.pointerClient.x-rect.left)*this.canvas.width/rect.width,y:(this.pointerClient.y-rect.top)*this.canvas.height/rect.height};}
     if (!this.last) this.last = time;
     this.debt += Math.min(100, time-this.last); this.last=time;

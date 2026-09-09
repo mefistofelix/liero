@@ -12,6 +12,8 @@ handwritten source translation. The manual JS/SDL-shim fallback is in AGENTS.md.
 - `src/game/`: upstream simulation, resources and pixel renderer.
 - `src/web/bridge.cpp`: deterministic initialization, absolute aim, input mapping,
   camera presentation, original weapon artwork and browser audio capture.
+- `src/web/netstate.hpp`: complete pointer-free online save/restore and canonical
+  state hashing; original simulation sources are unchanged by this netcode revision.
 - `src/browser/`: native DOM menus, Canvas presentation, fixed 70 Hz scheduling,
   WebRTC input transport, storage, level import and recording.
 - `src/server/`: D1-compatible regional rooms, membership, signaling and chat;
@@ -52,19 +54,28 @@ signals. It does not store simulation frames. Private room invitations are rando
 capabilities, hashed in the database, carried in URL fragments and sent only in
 the room API header. Public listings omit invitation capabilities.
 
-The host coordinates deterministic input lockstep over reliable, ordered WebRTC
-data channels with a six-tick input buffer. Both players run the same engine.
-Every 70 ticks they compare a terrain/worm-state hash and stop on divergence.
-Late spectators receive the seed, exact map bytes, round settings and bounded
-input history, then catch up and follow live commits. Spectators cannot submit
-player inputs. Rounds have a one-hour history bound. The host starts the next
-rotation map five seconds after the round ends while both players remain.
+Protocol 6 follows the observed WebLiero architecture: the host assigns ticks and
+sequence numbers to compact input changes and advances without waiting for every
+guest. All peers run the same native engine at 70 Hz. Clients retain a confirmed
+baseline and predict up to 14 ticks ahead, then restore/replay that bounded world
+when confirmed progress or corrected action timing arrives. Two ticks of input
+delay reduce correction work. The rope and its anchor are restored together.
 
-This is not WebLiero's host-authoritative prediction/rollback implementation.
-It has no rollback and higher latency may stall the simulation. Current replay
-hashes cover terrain and major worm state, not every hidden object or RNG field.
-Successful builds, cross-output fixtures and local WebRTC tests do not prove
-complete parity with the original game or internet reliability.
+Three negotiated WebRTC channels separate reliable ordered control/checkpoints,
+reliable unordered actions and unreliable unordered progress. Progress is 10 Hz;
+every 70 ticks a hash covers the complete serialized canonical world. Divergence
+requests a new checkpoint with retry limits. Spectators cannot submit player inputs.
+Late viewers receive compressed original map bytes plus the current world and
+pending actions, not an entire round's history. Rounds retain a one-hour duration
+limit. Host succession still restarts the level, rather than migrating its exact frame.
+
+The adapter silences speculative audio and exposes only confirmed kill/death
+telemetry, avoiding repeated effects during replay. Local physics, RNG, weapon
+definitions and the native tick order are unchanged. The native replay serializer
+and postClone are not used as complete snapshots. Tests include identical ongoing
+simulation after JS/WASM checkpoint exchange and a rope anchored to the other worm.
+These fixtures do not establish exhaustive parity or internet reliability. See
+[NETCODE.md](NETCODE.md) for measured results and the remaining browser test gap.
 
 ## WebLiero reference
 

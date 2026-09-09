@@ -53,18 +53,26 @@ dalla proprietà della stanza. Il pulsante Play prenota un posto disponibile.
 Un solo player pronto avvia subito il gioco: il posto vuoto è eliminato tramite
 l'adapter e la fine partita viene sospesa. La simulazione originale continua con
 respawn; quando arriva il secondo player riparte un round sincronizzato sulla
-stessa mappa con le regole della stanza. Il lockstep invia input neutro per il
+stessa mappa con le regole della stanza. Il netcode usa input neutro per il
 posto vuoto e funziona anche con host spettatore.
 La vecchia API /api/queue resta disponibile come prototipo separato; l'interfaccia
 usa /api/rooms. Il primo deployment e le API D1 sono stati verificati online.
 
-Due player eseguono lockstep su WebRTC con sei tick di buffer. La pagina dell'host
-deve restare attiva: i browser limitano requestAnimationFrame in background.
-Il trasporto non ha prediction/rollback né recupero automatico dell'host.
-Un disallineamento degli hash ferma la partita. Gli spettatori ricevono lo storico
-di input e i byte della mappa senza occupare un posto player. La cronologia è
-limitata a un'ora per round. I ping mostrati misurano RTT peer-to-host, non D1.
-STUN è configurato; reti che richiedono TURN possono non collegarsi.
+Il protocollo 6 invia solo cambi di input in binario: l'host li ordina e avanza
+senza attendere ogni guest. Ogni peer esegue il C++ originale a 70 Hz, con due tick
+di ritardo input e previsione limitata a 14 tick oltre lo stato confermato.
+Il ripristino include terreno, oggetti, RNG, armi e rope agganciate agli altri vermi.
+Progressi a 10 Hz e hash completi a 1 Hz permettono conferma e recupero automatico
+con checkpoint compresso. Tre canali WebRTC separano controllo affidabile ordinato,
+azioni affidabili non ordinate e progressi non affidabili non ordinati.
+CompressionStream/DecompressionStream del browser comprimono mappe e checkpoint;
+non si aggiungono librerie o runtime. Gli spettatori ricevono lo stato corrente
+e gli eventi pendenti; non c'è più uno storico dell'intero round da riprodurre.
+La durata del round resta limitata a un'ora. Audio e kill feed seguono lo stato
+confermato. La pagina dell'host deve restare attiva: requestAnimationFrame è
+limitato in background. I ping misurano RTT peer-to-host, non D1. STUN è configurato;
+reti che richiedono TURN possono non collegarsi. L'alpha non mantiene compatibilità
+con client precedenti: tutti devono ricaricare dopo un cambio di protocollo.
 
 Preferenze in localStorage; mappe importate e registrazioni in IndexedDB.
 La cancellazione dei dati del sito rimuove questo archivio locale. MP4 usa
@@ -112,8 +120,9 @@ Le presenze usano un’identità diversa per ingresso: quit autenticato keepaliv
 pagehide, recupero della vecchia sessione al reload e filtro delle risposte tardive.
 D1 conserva per cinque minuti la revoca della sessione, impedendo a join tardivi
 di ricrearla. In caso di crash o rete assente resta il TTL di 120 secondi.
-Il protocollo WebRTC 5 registra anche i cambi di loadout nei frame sincronizzati
-e nella history. I preset sono locali e separati per i due profili.
+Il protocollo WebRTC 6 ordina anche i cambi di loadout nella timeline; il checkpoint
+conserva gli effetti già applicati e gli eventi ancora pendenti. I preset sono locali
+e separati per i due profili.
 Il font TrueType è caricato con CSS @font-face sui browser, senza installazione
 di sistema; le icone PWA/Apple vengono convertite dal favicon.ico locale con Bun.
 

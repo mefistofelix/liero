@@ -6,6 +6,7 @@ import {MapLibrary} from './maps-ui.ts';
 import {WeaponLibrary} from './weapons-ui.ts';
 import {RoomClient,api,probeRoom,type Room} from './rooms.ts';
 import {NetworkRound,NETWORK_VERSION,rulesKey,applyLiveRules,applyLiveLoadout} from './netgame.ts';
+import {compressCheckpoint,decompressCheckpoint} from './net-packets.ts';
 import {validateLevel,levelBytes,type Level} from './maps.ts';
 import {GameRecorder,listRecordings,deleteRecording,type Recording} from './recordings.ts';
 import {roomWeapons} from './room-weapons.ts';
@@ -155,18 +156,22 @@ room.onState=renderRoom;room.onError=error=>{if([403,404,409].includes((error as
 room.onReady=id=>{if(!room.host)room.send(id,{type:'ready',version:NETWORK_VERSION,loadout:prefs.loadouts[0]});};
 room.onLost=id=>{if(id===room.room?.owner){if(round)round.ended=true;game?.stop();playing=false;notice('Host connection lost. Waiting for the room to reconnect or transfer.');void room.refresh().catch(report);return;}if(round&&!round.ended&&(id===room.room?.owner||(room.room?.members.find(m=>m.id===id)?.seat??-1)>=0)){round.ended=true;game.stop();playing=false;notice('Player connection lost. Return to the room to restart.');if(room.host)room.call('phase','PUT',{phase:'lobby'}).catch(report);}};
 function validLoadout(v:any){return Array.isArray(v)&&v.length===5&&v.every(n=>Number.isInteger(n)&&n>=1&&n<=40);}
-function sendSetup(id:string){
- if(!setup)return;
- room.send(id,{type:'start-meta',setup});
- if(mapData){let binary='';for(const value of mapData)binary+=String.fromCharCode(value);const encoded=btoa(binary);for(let i=0;i<encoded.length;i+=48000)room.send(id,{type:'map-chunk',round:setup.id,offset:i,data:encoded.slice(i,i+48000)});}
- room.send(id,{type:'start',round:setup.id});round?.history(id);
+const earlyPackets=new Map<string,Record<string,any>[]>();
+let startEpoch=0;
+function sendSetup(id:string){void transferSetup(id).catch(report);}
+async function transferSetup(id:string){
+ const value=setup,current=round;if(!value)return;
+ const compressed=mapData?await compressCheckpoint(mapData):new Uint8Array();if(setup!==value)return;
+ room.send(id,{type:'start-meta',setup:{...value,map:{...value.map,transferBytes:compressed.length}}});
+ for(let offset=0;offset<compressed.length;offset+=8192)room.send(id,{type:'map-chunk',round:value.id,offset,data:compressed.slice(offset,offset+8192)});
+ room.send(id,{type:'start',round:value.id});await current?.sendCheckpoint(id);
 }
 function launchNetwork(value:any,data:Uint8Array|null){
  applyRules(value.rules,value.loadouts,value.colors,data);lastRulesKey=rulesKey(value.rules);setup=value;mapData=data;localTwo=false;follow=room.seat===1?1:0;playerNames=[0,1].map(p=>playerName(value.players?.[p],''));setup.players=[...playerNames];el('map-name').textContent=value.map.name;
  if(round)round.ended=true;
  if(value.preview){round=undefined;playing=false;arena.reset();game.preview(value.seed);el('hud').hidden=true;el('spectator-tools').hidden=true;arena.nextCamera(true);return;}
  round=new NetworkRound(module,room,value.id,Array.isArray(value.playerIds)?value.playerIds.indexOf(room.room?.self):room.seat,value.participants??3);round.onError=message=>{console.error(message);game.stop();playing=false;notice(message);openMenu('rooms-menu');};round.onEnd=()=>{if(room.host){room.call('phase','PUT',{phase:'lobby'}).catch(report);roomTimeoutNext();}};
- game.start(false,false,value.seed,round);game.setSound(prefs.sound);select('camera').options[0].textContent='Follow '+playerNames[0];select('camera').options[1].textContent='Follow '+playerNames[1];select('camera').value=String(follow);showGame();if(round.spectator)arena.nextCamera(true);
+ game.start(false,false,value.seed,round);for(const packet of earlyPackets.get(value.id)||[])round.receive(room.room!.owner,packet);earlyPackets.delete(value.id);game.setSound(prefs.sound);select('camera').options[0].textContent='Follow '+playerNames[0];select('camera').options[1].textContent='Follow '+playerNames[1];select('camera').value=String(follow);showGame();if(round.spectator)arena.nextCamera(true);
 }
 function roomTimeoutNext(){clearTimeout(roundTimeout);roundTimeout=0;roundTimeout=window.setTimeout(()=>{roundTimeout=0;if(room.host&&room.id&&room.room?.members.filter(m=>m.seat>=0).length>0)startOnline().catch(report);},5000);}
 async function startOnline(mapId?:string,restart=false){if(startingRound)return startingRound;const task=guard(async()=>{
@@ -187,6 +192,12 @@ async function switchRoomMap(level:Level){
 click('start-round',async()=>{await startOnline();closeMenus();});
 room.onPacket=(from,packet)=>{
  try{
+  // Negotiated action/progress channels may overtake ordered setup messages.
+  if(!room.host&&from===room.room?.owner&&['event','progress','checkpoint-meta','checkpoint-chunk'].includes(packet.type)&&packet.round!==round?.id){
+   if(typeof packet.round!=='string'||packet.round.length>64)return;
+   if(!earlyPackets.has(packet.round)){if(earlyPackets.size>=2)earlyPackets.delete(earlyPackets.keys().next().value!);earlyPackets.set(packet.round,[]);}
+   const queue=earlyPackets.get(packet.round)!;if(queue.length<2048)queue.push(packet);return;
+  }
   if(packet.type==='seat-changed'&&room.host&&room.room?.members.some(m=>m.id===from)){void room.refresh().catch(report);return;}
   if(packet.type==='chat-delivery'&&!room.host&&from===room.room?.owner){arena.receiveChat(packet.message);return;}
   if(packet.type==='chat-posted'&&room.host){const member=room.room?.members.find(m=>m.id===from),msg=packet.message;if(!member||!msg||msg.player!==from||typeof msg.message!=='string'||msg.message.length>500||!Number.isSafeInteger(msg.seq))return;const message={...msg,name:member.name};arena.receiveChat(message);room.broadcast({type:'chat-delivery',message});return;}
@@ -196,9 +207,13 @@ room.onPacket=(from,packet)=>{
   if(packet.type==='pings'&&!room.host&&from===room.room?.owner){peerPings=packet.pings||{};return;}
   if(packet.type==='ended'&&from===room.room?.owner&&packet.round===round?.id){round!.ended=true;game.stop();endGame();return;}
   if(from===room.room?.owner&&!room.host){
-   if(packet.type==='start-meta'){const v=packet.setup;if(v?.version!==NETWORK_VERSION||![1,2,3].includes(v.participants??3)||typeof v.id!=='string'||!Number.isInteger(v.seed)||!Array.isArray(v.loadouts)||!v.loadouts.every(validLoadout)||v.loadouts.length!==2||!Array.isArray(v.players)||v.players.length!==2||!Array.isArray(v.colors)||v.colors.length!==2||![0,1,2,3].includes(v.rules?.mode)||!Number.isInteger(v.map?.bytes)||v.map.bytes<0||v.map.bytes>1048576)throw new Error('Invalid round setup.');staging={value:v,chunks:[],size:0};return;}
-   if(packet.type==='map-chunk'&&staging?.value.id===packet.round){if(packet.offset!==staging.size||typeof packet.data!=='string'||packet.data.length>48000||staging.size+packet.data.length>1398104)throw new Error('Invalid map transfer.');staging.chunks.push(packet.data);staging.size+=packet.data.length;return;}
-   if(packet.type==='start'&&staging?.value.id===packet.round){const bytes=staging.value.map.bytes?Uint8Array.from(atob(staging.chunks.join('')),c=>c.charCodeAt(0)):null;if((bytes?.length||0)!==staging.value.map.bytes)throw new Error('Incomplete map transfer.');launchNetwork(staging.value,bytes);staging=undefined;return;}
+   if(packet.type==='start-meta'){const v=packet.setup;if(v?.version!==NETWORK_VERSION||![1,2,3].includes(v.participants??3)||typeof v.id!=='string'||!Number.isInteger(v.seed)||!Array.isArray(v.loadouts)||!v.loadouts.every(validLoadout)||v.loadouts.length!==2||!Array.isArray(v.players)||v.players.length!==2||!Array.isArray(v.colors)||v.colors.length!==2||![0,1,2,3].includes(v.rules?.mode)||!Number.isInteger(v.map?.bytes)||v.map.bytes<0||v.map.bytes>1048576||!Number.isInteger(v.map.transferBytes)||v.map.transferBytes<0||v.map.transferBytes>1100000)throw new Error('Invalid round setup.');staging={value:v,chunks:[],size:0,epoch:++startEpoch};return;}
+   if(packet.type==='map-chunk'&&staging?.value.id===packet.round){if(packet.offset!==staging.size||!(packet.data instanceof Uint8Array)||packet.data.length>8192||staging.size+packet.data.length>staging.value.map.transferBytes)throw new Error('Invalid map transfer.');staging.chunks.push(packet.data);staging.size+=packet.data.length;return;}
+   if(packet.type==='start'&&staging?.value.id===packet.round){
+    const pending=staging;staging=undefined;if(pending.size!==pending.value.map.transferBytes)throw new Error('Incomplete map transfer.');
+    const packed=new Uint8Array(pending.size);let offset=0;for(const chunk of pending.chunks){packed.set(chunk,offset);offset+=chunk.length;}
+    void (pending.size?decompressCheckpoint(packed):Promise.resolve(null)).then(bytes=>{if(pending.epoch!==startEpoch||from!==room.room?.owner)return;if((bytes?.length||0)!==pending.value.map.bytes)throw new Error('Incomplete map transfer.');launchNetwork(pending.value,bytes);}).catch(report);return;
+   }
   }
   round?.receive(from,packet);
  }catch(error){report(error);}
