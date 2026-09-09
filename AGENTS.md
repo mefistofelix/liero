@@ -141,9 +141,11 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - Kill feed sits below the player list: killer, actual weapon, victim; entries fade.
   Include suicides with no killer name. Keep these entries through round transitions.
   Observe original StatsRecorder callbacks. Do not infer weapons from current loadouts.
-- Worm labels display the player name, with two thin bars below it for health and
-  current-weapon reload progress, including while spectating. Use original engine
-  health limits and reload timers. Keep the player name on weapon changes, and briefly show the local player weapon name above it. Hide the
+- Worm labels display other players' names, with two thin bars below for health and
+  current-weapon reload progress. Hide your own name while playing; spectators see
+  all player names. Keep the bars anchored above the worm, and briefly show the
+  local weapon-change text directly above the bars without an empty name row.
+  Use original engine health limits and reload timers. Hide the
   original kill/suicide banners and weapon-switch text; use the browser overlays.
 - Startup: open Room Browser directly on Explore while loading Temple. No welcome popup. Joining or
   creating a room and explicit Play actions close the popup. Invite links join directly.

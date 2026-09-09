@@ -75,7 +75,7 @@ export class ArenaUI{
   for(let p=0;p<2;p++){
    const label=el('worm-label-'+p),base=24+p*4,x=state[base],y=state[base+1];const own=p===seat;
    label.hidden=!c.playing()||!state[base+2]||x<0||x>canvas.width||y<0||y>canvas.height;
-   el('worm-name-'+p).textContent=c.names()[p];
+   const nameLabel=el('worm-name-'+p);nameLabel.textContent=c.names()[p];nameLabel.hidden=own;
    const selected=state[base+3],weaponLabel=el('worm-weapon-'+p);
    if(selected!==this.lastWeapon[p]){if(own&&this.lastWeapon[p]>=0&&state[base+2])this.weaponUntil[p]=now+1500;this.lastWeapon[p]=selected;}
    weaponLabel.hidden=!own||now>=this.weaponUntil[p];
