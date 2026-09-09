@@ -6,13 +6,51 @@
 - Complete snapshot save/restore, JS/WASM exchange, ropes anchored to worms,
   delayed/reordered/duplicate input, dropped progress, late spectators, confirmed
   state divergence recovery and one-shot Stop are tested with real engines.
-- WebRTC channel/queue checks use a fake RTCPeerConnection; they do not establish
-  a real protocol-6 browser handshake. One local browser started and played a room
-  without console errors. The automation URL policy blocked opening the private
-  invite in another tab; multi-tab testing remains incomplete.
+- Automated WebRTC channel/queue checks use a fake RTCPeerConnection. Separate
+  real multi-tab WebRTC gameplay checks are recorded below.
 - `bun run netcode:audit` completes 2,100 host ticks with up to 400 ms synthetic
   RTT and no resync errors. It includes a continuous aim/fire/rope workload.
   See NETCODE.md for payload/CPU measurements and their scope.
+
+### Published browser gameplay checks
+
+Tested the public deployment of `93e7cd9` on 2026-09-09, using an isolated private
+room, two playing tabs and a spectator in the same desktop browser. Inputs and
+joins went through the normal interface. The invite was read from the visible
+room-link field after Copy; the earlier report of an automation policy block was
+incorrect: the clipboard read had returned an empty URL.
+
+| Case | Observed result |
+| --- | --- |
+| Private invite / real WebRTC | Additional tabs joined the live match; displayed host RTT was typically 2–5 ms. |
+| Shots between both players | Gauss Gun and Shotgun hits reduced the other worm's health, with matching bars in host, guest and spectator. One settled comparison showed 63 HP / 35 HP in all three. |
+| Lethal shot / respawn | A host Gauss Gun shot killed the guest: host K=1/D=0, guest K=0/D=1, correct weapon in the feed, then guest health restored to 100 in all views. |
+| Rope anchored to another worm | A guest right-click throw attached to the host worm; both were visibly pulled toward one another, with matching relative positions and connecting rope in the two player views. Space released the rope. |
+| Digging | Four contextual right-clicks dug a visible opening into a dirt block. The following spectator displayed the same opening and worm position. Reloading that spectator preserved the opening and existing K/D. |
+| Explosion / self-kill | A Chiquita Bomb fired into the opening removed a larger, distinctive crater. Both player views and the spectator agreed; guest D became 2 while host K stayed 1. |
+| Fresh join after destruction | A new spectator tab, opened after the explosion, received the same crater, blood marks, player positions, host 63 HP / guest 100 HP and K/D 1/0 vs 0/2. Its free camera was used to inspect the crater. |
+| Guest reload / re-entry | The guest rejoined as a spectator and could claim a seat again; reload did not retain an extra copy of that member. |
+| Spectator host | After the host stopped playing, the other player could continue in the restarted solo round. |
+| Console | No errors or warnings captured in the host, guest or final spectator during these checks. |
+
+The combat/terrain fixture was imported through Maps as a normal 504 × 350 LEV:
+background index 164, rock index 19 around the edges and below y=280, and a dirt
+index 16 block at x=210..294, y=110..144. This made line-of-fire and terrain
+changes easy to compare. Earlier checks also used Temple. Temporary maps were
+removed from the rotation afterward, leaving Temple selected.
+
+For a repeat: keep both player seats occupied throughout digging, shooting and
+the late spectator join. A seat change or Play map now intentionally restarts
+the round and therefore cannot validate transfer of its previously altered
+terrain. Compare the same camera target, health/reload bars and K/D after the
+join has finished; then use free camera to inspect the modified area.
+
+This is real browser UI/WebRTC evidence, not a byte-by-byte browser memory check
+or a WAN benchmark. Exact state equality, object references, anchored-rope
+checkpoint restore and injected divergence recovery are covered separately by
+the engine tests. Cross-device play, constrained bandwidth, packet loss and
+different NATs still need real-network testing. Closing a tab without a delivered
+quit can leave its member visible until the documented heartbeat expiry.
 
 ## Earlier milestones (previous network protocol)
 

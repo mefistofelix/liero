@@ -186,12 +186,24 @@ its size and recovery work do not grow with the elapsed round duration.
 - Negotiated channel configuration, binary encoding, queue priority/backpressure,
   progress supersession, reliable final progress and idempotent connection close.
 
-The real local browser started a private room and played without console errors.
-Opening its invite in a second browser tab was blocked by the automation URL
-policy, so protocol-6 multi-tab WebRTC handshake/gameplay verification is
-incomplete. The transport test uses a fake RTCPeerConnection; the simulation and
-serialization tests use real compiled engines. Earlier browser checks in
-VALIDATION.md concern the previous protocol and do not close this gap.
+Real browser checks on the public deployment of `93e7cd9` used a private room,
+two playing tabs and a spectator, with actual WebRTC connections. Shots in both
+directions produced matching health bars; a lethal Gauss Gun hit produced the
+same kill/death counts and weapon attribution, followed by respawn at full health.
+A rope attached to the other worm pulled both worms together in both views.
+Right-click digging and a Chiquita Bomb changed the terrain identically for the
+connected viewer. A reloaded spectator received the dug opening; a fresh tab
+joining after the explosion received the existing crater and current health/K/D.
+No player seat changed during those terrain-join checks, so the round did not
+restart. Guest reload/re-entry and a spectator host were also exercised.
+See [VALIDATION.md](VALIDATION.md) for the procedure and observed values.
+
+These browser checks compare rendered gameplay and DOM health/reload/score
+indicators, not hidden engine state. They ran in the same desktop browser on one
+machine, without network impairment, and logged no console errors or warnings.
+They establish real multi-tab WebRTC behavior, not cross-device/WAN reliability.
+The automated transport tests still use a fake RTCPeerConnection; the separate
+simulation/serialization tests use real compiled engines and exact state equality.
 
 The host must remain active; browser background throttling still applies.
 No TURN, headless host, cheat-resistant server or visual correction smoothing

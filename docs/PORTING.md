@@ -75,7 +75,7 @@ definitions and the native tick order are unchanged. The native replay serialize
 and postClone are not used as complete snapshots. Tests include identical ongoing
 simulation after JS/WASM checkpoint exchange and a rope anchored to the other worm.
 These fixtures do not establish exhaustive parity or internet reliability. See
-[NETCODE.md](NETCODE.md) for measured results and the remaining browser test gap.
+[NETCODE.md](NETCODE.md) for measured results, real browser checks and their limits.
 
 ## WebLiero reference
 
