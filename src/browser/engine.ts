@@ -1,5 +1,6 @@
 import type {NetworkRound} from './netgame.ts';
 import {defaultControls,type Controls} from './preferences.ts';
+import {TouchInput} from './touch-input.ts';
 export type EngineModule = {
   FS:{writeFile(path:string,data:Uint8Array):void};audioStream?:MediaStream;
   _liero_options(mode:number,lives:number,loading:number,bonuses:number,imported:number):void;
@@ -56,6 +57,7 @@ export class LocalGame {
   private wheel = 0;
   private mouse = {x: 100, y: 80};
   private pointerClient?:{x:number;y:number};
+  private touch=new TouchInput();
   private events = new AbortController();
   private pixels = new ImageData(320,200);
   private context: CanvasRenderingContext2D;
@@ -64,8 +66,9 @@ export class LocalGame {
     if (!ctx) throw new Error('Canvas is unavailable.');
     this.context = ctx;
     const opts = {signal: this.events.signal};
-    canvas.addEventListener('pointermove', this.point, opts);
+    canvas.addEventListener('pointermove', event=>event.pointerType==='touch'?this.touchPoint(event):this.point(event), opts);
     canvas.addEventListener('pointerdown', event => {
+      if(event.pointerType==='touch'){this.touchPoint(event);return;}
       canvas.focus(); this.point(event);
       canvas.setPointerCapture(event.pointerId);
       this.pendingButtons|=event.buttons&~this.buttons;
@@ -73,14 +76,15 @@ export class LocalGame {
     }, opts);
     // Pointerdown fires only for the first mouse button; mousedown includes chords.
     canvas.addEventListener('mousedown', event => {
+      if((event as MouseEvent&{sourceCapabilities?:{firesTouchEvents:boolean}}).sourceCapabilities?.firesTouchEvents)return;
       event.preventDefault();
       this.buttons = event.buttons;
       this.pendingButtons|=event.button===0?1:event.button===2?2:event.button===1?4:0;
     }, opts);
-    window.addEventListener('mouseup', event => {this.buttons=event.buttons;}, opts);
-    canvas.addEventListener('pointerup', event => {this.buttons = event.buttons;}, opts);
-    canvas.addEventListener('pointercancel', this.clear, opts);
-    canvas.addEventListener('lostpointercapture', () => {this.buttons=0;}, opts);
+    window.addEventListener('mouseup', event => {if(!(event as MouseEvent&{sourceCapabilities?:{firesTouchEvents:boolean}}).sourceCapabilities?.firesTouchEvents)this.buttons=event.buttons;}, opts);
+    canvas.addEventListener('pointerup', event => {if(event.pointerType==='touch'){event.preventDefault();this.touch.up(event.pointerId);}else this.buttons=event.buttons;}, opts);
+    canvas.addEventListener('pointercancel', event=>event.pointerType==='touch'?this.touch.clear():this.clear(), opts);
+    canvas.addEventListener('lostpointercapture', event => {if(event.pointerType==='touch'){if(this.touch.has(event.pointerId))this.touch.clear();}else this.buttons=0;}, opts);
     canvas.addEventListener('contextmenu', e => e.preventDefault(), opts);
     canvas.addEventListener('auxclick', e => e.preventDefault(), opts);
     canvas.addEventListener('wheel', event => {
@@ -99,21 +103,42 @@ export class LocalGame {
     this.resizeObserver=new ResizeObserver(()=>this.resize());
     this.resizeObserver.observe(canvas.parentElement!);
   }
+  private touchPoint(event:PointerEvent){
+    // Cancel compatibility mouse events. touch-action:none on the canvas also
+    // keeps page gestures from cancelling game contacts; menus retain scrolling.
+    event.preventDefault();
+    if(document.querySelector('dialog[open],#chat-compose:not([hidden])')){this.touch.clear();return;}
+    const previous=this.touch.aim;
+    if(event.type==='pointerdown'){
+      this.canvas.focus();this.canvas.setPointerCapture(event.pointerId);
+      this.touch.down(event.pointerId,{x:event.clientX,y:event.clientY});
+    }else this.touch.move(event.pointerId,{x:event.clientX,y:event.clientY});
+    const point=this.touch.aim;if(!point)return;
+    if(event.type==='pointermove'&&this.freeCamera&&this.touch.panning&&previous)this.pan(point.x-previous.x,point.y-previous.y);
+    // Keep aim on the first finger: adding rope/release fingers must not rotate it.
+    this.updatePoint(point.x,point.y);
+  }
+  private pan(dx:number,dy:number){
+    const rect=this.canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;
+    this.camera.x=Math.max(this.canvas.width/2,Math.min(504-this.canvas.width/2,this.camera.x-dx*this.canvas.width/rect.width));
+    this.camera.y=Math.max(this.canvas.height/2,Math.min(350-this.canvas.height/2,this.camera.y-dy*this.canvas.height/rect.height));
+    this.module._liero_camera(this.camera.x,this.camera.y);if(this.previewing)this.render();
+  }
+  private updatePoint(x:number,y:number){
+    this.pointerClient={x,y};const rect=this.canvas.getBoundingClientRect();
+    if(rect.width&&rect.height)this.mouse={x:(x-rect.left)*this.canvas.width/rect.width,y:(y-rect.top)*this.canvas.height/rect.height};
+  }
   private point = (event: PointerEvent) => {
     this.pendingButtons|=event.buttons&~this.buttons;
     this.buttons=event.buttons;
-    const rect = this.canvas.getBoundingClientRect();
     if(this.freeCamera&&(event.buttons&2)&&event.type==='pointermove'){
-      this.camera.x=Math.max(this.canvas.width/2,Math.min(504-this.canvas.width/2,this.camera.x-(event.clientX-this.dragPoint.x)*this.canvas.width/rect.width));
-      this.camera.y=Math.max(this.canvas.height/2,Math.min(350-this.canvas.height/2,this.camera.y-(event.clientY-this.dragPoint.y)*this.canvas.height/rect.height));
-      this.module._liero_camera(this.camera.x,this.camera.y);if(this.previewing)this.render();
+      this.pan(event.clientX-this.dragPoint.x,event.clientY-this.dragPoint.y);
     }
     this.dragPoint={x:event.clientX,y:event.clientY};
-    this.pointerClient={x:event.clientX,y:event.clientY};
-    this.mouse = {x: (event.clientX-rect.left)*this.canvas.width/rect.width, y: (event.clientY-rect.top)*this.canvas.height/rect.height};
+    this.updatePoint(event.clientX,event.clientY);
   };
   private dragPoint={x:0,y:0};
-  private clear = () => {this.keys.clear();this.pendingKeys.clear();this.buttons=0;this.pendingButtons=0;this.wheel=0;this.debt=0;this.last=0;};
+  private clear = () => {this.keys.clear();this.pendingKeys.clear();this.buttons=0;this.pendingButtons=0;this.wheel=0;this.touch.clear();this.debt=0;this.last=0;};
   start(localTwo=false, keyboardOnly=true, seed=crypto.getRandomValues(new Uint32Array(1))[0], network?:NetworkRound) {
     this.stop();this.previewing=false; this.localTwo=localTwo;this.keyboardOnly=keyboardOnly;
     this.network=network;this.freeCamera=false;this.module._liero_player(network?.seat===1?1:0);
@@ -159,16 +184,18 @@ export class LocalGame {
   private frame = (time: number) => {
     const menu=!!document.querySelector('dialog[open],#chat-compose:not([hidden])');
     if(this.paused){this.clear();this.raf=requestAnimationFrame(this.frame);return;}
-    if(menu){this.keys.clear();this.pendingKeys.clear();this.buttons=0;this.pendingButtons=0;this.wheel=0;}
+    if(menu){this.keys.clear();this.pendingKeys.clear();this.buttons=0;this.pendingButtons=0;this.wheel=0;this.touch.clear();}
     if(this.pointerClient){const rect=this.canvas.getBoundingClientRect();if(rect.width&&rect.height)this.mouse={x:(this.pointerClient.x-rect.left)*this.canvas.width/rect.width,y:(this.pointerClient.y-rect.top)*this.canvas.height/rect.height};}
     if (!this.last) this.last = time;
     this.debt += Math.min(100, time-this.last); this.last=time;
     while (this.debt >= 1000/70) {
       const down=(index:number)=>this.keys.has(this.controls.mouse[index])||this.pendingKeys.has(this.controls.mouse[index]);
       const mouse=this.buttons|this.pendingButtons;
-      const b=(down(0)?1:0)|(down(1)?2:0)|(down(4)||(mouse&4)?4:0)
-        |((mouse&1)||down(5)?8:0)|((mouse&2)?16:0)|(down(2)?64:0)|(down(3)?128:0);
       const consumesInput=!this.network||this.network.needsInput;
+      const touch=this.touch.sample(consumesInput||this.freeCamera||!!this.network?.spectator);
+      const b=(down(0)?1:0)|(down(1)?2:0)|(down(4)||(mouse&4)?4:0)
+        |((mouse&1)||down(5)?8:0)|((mouse&2)?16:0)|(down(2)?64:0)|(down(3)?128:0)
+        |(this.freeCamera||this.network?.spectator?0:touch);
       const wheel = Math.sign(this.wheel);if(consumesInput)this.wheel-=wheel;
       const aim = this.module._liero_aim(this.network?.seat===1?1:0,this.mouse.x,this.mouse.y,b);
       if(this.freeCamera){this.camera.x=Math.max(0,Math.min(504,this.camera.x+((b&2)?2:0)-((b&1)?2:0)));this.camera.y=Math.max(0,Math.min(350,this.camera.y+(down(3)?2:0)-(down(2)?2:0)));this.module._liero_camera(this.camera.x,this.camera.y);}

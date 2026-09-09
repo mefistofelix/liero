@@ -1,5 +1,22 @@
 # Local milestone validation — 2026-09-09
 
+## Touch input
+
+`bun test src/tests/engine.test.mjs src/tests/touch-input.test.ts
+src/tests/mouse-input.test.ts`: 26 passing tests. Synthetic PointerEvent sequences
+exercise the LocalGame event handlers: first-finger aiming, one-finger fire,
+two-finger contextual rope/dig, three-finger release, no lower-count action when
+lifting fingers, rapid rethrow, short taps, pending network input, compatibility
+mouse suppression, cancellation, lost capture, menus, blur and free-camera drag.
+The existing desktop mouse-chord and native engine fixtures still pass, including
+JS/WASM keyboard parity. No native or network protocol changes were needed.
+
+This validates event handling and engine input, not a physical multi-touch device.
+Android/iOS gesture delivery and ergonomics still need testing on a phone. The
+browser adapter cancels touch pointer defaults and keeps `touch-action: none`
+scoped to the arena, following the
+[Pointer Events compatibility-mouse rules](https://www.w3.org/TR/pointerevents3/#compatibility-mapping-with-mouse-events).
+
 ## Room presence in chat
 
 Checked a private local room through two browser tabs: the host saw one system

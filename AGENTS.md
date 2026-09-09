@@ -7,6 +7,12 @@
 - Rendering, audio, local input, remote input, lobby and transport are platform
   adapters. Do not approximate or redesign the simulation for convenience.
 - Mouse aiming; left button fires; wheel changes weapon.
+- Touch on the arena maps to existing input intents: one finger holds fire and
+  dragging aims, two fingers use contextual right click (rope/rethrow or dirt
+  digging), three fingers release like middle click. Keep aim on the first finger.
+  Lifting fingers after a chord must not retrigger a lower-count action. One-finger
+  dragging pans free camera. Cancel touch state on blur, menus or lost capture;
+  suppress compatibility mouse events without changing desktop mouse chords.
 - Mouse buttons work together: fire remains active while holding right click,
   adjusting the rope or scrolling weapons. Middle click jumps/releases rope like
   Space; explicit release also wins while scrolling. Keyboard-only behavior stays original.

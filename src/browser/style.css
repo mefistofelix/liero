@@ -74,3 +74,4 @@ button[aria-busy=true]::after{content:'';display:block;flex:0 0 16px;width:16px;
 #hud-toggle[aria-pressed="true"],#players-toggle[aria-expanded="true"]{color:var(--accent);background:#3a472b}
 .github-link{position:fixed;right:max(10px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));z-index:12;width:34px;height:34px;background:#161b20cf;border:1px solid #9ca9b12b;border-radius:3px;text-decoration:none}.github-link svg{fill:currentColor;stroke:none}.github-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #overlay-players .can-follow{pointer-events:auto;cursor:pointer}#overlay-players .can-follow:hover{background:#86918b22}#overlay-players .is-followed{background:#3a472b;color:var(--accent)}#overlay-players .player-follow{width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left}
+#game{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
