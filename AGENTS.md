@@ -229,3 +229,6 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
   Increment host_epoch on each transfer, discard old-host signaling and stale state snapshots,
   reconnect peers and restart the current level from received bytes/seed. No seamless frame migration.
   While Explore is visible, prune vanished rooms every 15 seconds without repeating ping probes.
+
+- The bottom game stats panel is hidden by default; its right-toolbar toggle persists locally. Popup close buttons use the literal X glyph from the Liero font.
+- Key bindings show only the profile selected through the toolbar; choose mouse/keyboard controls from the current play mode. Reset controls affects only that profile and mode.

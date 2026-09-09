@@ -68,3 +68,6 @@ button[aria-busy=true]::after{content:'';display:block;flex:0 0 16px;width:16px;
 #overlay-players .member-name{max-width:180px}
 
 #recordings-toggle.is-recording{position:relative;color:#ff6e6e}#recordings-toggle.is-recording::before{content:"";position:absolute;right:3px;top:3px;width:7px;height:7px;border-radius:50%;background:#ff4b4b;box-shadow:0 0 0 2px #222e30}
+
+.dialog-heading>button[data-close]{font-family:Liero,monospace;font-size:20px;line-height:1;width:34px;height:34px;padding:0;flex-shrink:0}
+#hud-toggle[aria-pressed="true"]{color:var(--accent);background:#3a472b}
