@@ -122,6 +122,7 @@ Development uses a single `master` branch in [mefistofelix/liero](https://github
 
 - [Stack and toolchain](docs/stack.md)
 - [Porting decisions and fidelity limits](docs/PORTING.md)
+- [Netcode audit and next architecture](docs/NETCODE.md)
 - [Validation](docs/VALIDATION.md)
 - [Map formats and provenance](docs/MAPS.md)
 - [Original native build instructions](docs/NATIVE.md)

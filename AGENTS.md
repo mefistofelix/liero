@@ -234,3 +234,19 @@ AGENTS and original native metadata; do not add new competing app scaffolds.
 - Key bindings show only the profile selected through the toolbar; choose mouse/keyboard controls from the current play mode. Reset controls affects only that profile and mode.
 - Keep the source weapon on secondary explosion fragments for kill-feed telemetry, including self-kills. The player-list toolbar icon highlights while its panel is open.
 - Mouse aim retains subpixel pointer and worm coordinates, reprojects after canvas resizing, and selects the nearest normalized direction from the original 128-entry table. Use the original shot origin (one pixel above the worm) for fire/default aim and worm center for rope/dig-only input; simultaneous fire takes precedence. Never change projectile physics or native angular resolution for mouse precision.
+
+## Next netcode revision (evaluated, not implemented)
+- See docs/NETCODE.md for the audited protocol-5 baseline, public WebLiero bundle
+  evidence and the required validation. The current lockstep limits above still apply.
+- Transmit tick-indexed changes of input intent with compact binary encoding,
+  reliable event sequencing and low-rate progress/acknowledgments. Do not send
+  per-frame mouse coordinates, worm positions or redundant projectile events.
+- Preserve held controls and release edges; wheel/suicide are one-shot actions.
+  Aim updates remain necessary while firing or steering. Resolve contextual
+  right-click digging/rope through the existing deterministic input adapter.
+- Use a confirmed world plus bounded prediction/reconciliation and a complete
+  current-state checkpoint for joining, including altered terrain and active objects.
+  The original replay serializer and postClone are not complete rollback adapters.
+- Rope can anchor to another worm and apply forces to both. Restore the coupled
+  simulation from the first affected tick, not isolated remote-player positions.
+  Keep original 70 Hz physics/RNG/order; make netcode changes at adapter boundaries.
