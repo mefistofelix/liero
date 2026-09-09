@@ -40,6 +40,13 @@ Document the concrete primary-path failure before switching. Do not switch merel
 for stylistic preference or claim an approximate rewrite is a 1:1 port.
 
 ## Verification and reporting
+CSLiero Rewormed 0.37 was reviewed at the user's request. Extra weapons should
+remain external data with minimal native changes; the user explicitly prefers
+skipping them if integration complicates the original engine. Do not import this
+pack or approximate its behavior: its fractional damage, projectile repetition,
+bounce friction and separate sprite/palette data need more than a loader adapter.
+Keep the 40 classic weapons. See the compatibility findings in docs/PORTING.md.
+
 Check numeric determinism and gameplay state using identical seeds and per-tick
 inputs. Distinguish a successful build, tested gameplay parity and tested online
 play. Never claim full 1:1 parity from compilation alone.
@@ -173,6 +180,9 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   synchronized round on the same map with original multiplayer rules.
 - Spectate while playing requires a GUI confirmation and releases the slot.
   Any remaining player continues in a new solo round. Spectator clicks cycle players, then free camera.
+  While spectating, clicking an active player's table row follows that player;
+  highlight the selected row and support keyboard activation through its name button.
+  Spectator rows and the player list while playing do not switch the camera.
   Drag right mouse to pan free camera; configured WASD also works during live spectating.
 - Host owns room rules/rotation. Guests inspect room rules and edit their own profile/loadout.
   Rule/loadout changes are host-ordered events applied on a simulation tick and

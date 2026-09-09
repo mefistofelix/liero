@@ -88,3 +88,24 @@ is shipped in this fork.
 Native gameplay modes are retained. The screenshot's custom mod settings,
 expanded maps, arbitrary-size worlds, teams and WebLiero's altered terrain
 generator are not silently reproduced as original-engine features.
+
+### CSLiero Rewormed feasibility (2026-09-09)
+
+Reviewed Kami's CS Rewormed **0.37**, from the public
+[WebLiero mods repository](https://gitlab.com/webliero/webliero-mods/-/tree/206c9754781444ff2101ae8ce9ecf8a97e39d31a/kami/cs_rewormed).
+The pack was not integrated. The user prefers keeping additional weapons as
+external data with minimal native changes, and explicitly permits skipping this
+feature when it would complicate the original engine.
+
+This is not just a different file format: the SHOCKGRENADE projectile uses
+`hitDamage: 0.1`, `bounceFriction: 0.4` and `repeat: 2`. Native `Weapon` stores
+integer damage and has no equivalent `bounceFriction` or `repeat` fields.
+Rounding or dropping these properties would change the mod's behavior.
+Supporting the complete pack faithfully therefore needs simulation work, not
+only JSON5 conversion. The native settings and browser adapters also assume
+40 weapons, and the pack's sprite/palette references need a separate asset
+conversion and remapping path to coexist with the classic assets.
+
+The original 40 weapons, their IDs, assets and physics remain unchanged. No
+CS Rewormed assets or executable mod code are shipped. Reconsider only as a
+separate, explicitly authorized compatibility project with deterministic tests.

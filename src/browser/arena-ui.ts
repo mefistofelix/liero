@@ -24,24 +24,28 @@ export class ArenaUI{
  }
  audio(){el('sound-toggle').setAttribute('aria-pressed',String(!this.c.sound()));el('sound-toggle').setAttribute('aria-label',this.c.sound()?'Mute sound':'Enable sound');el('sound-toggle').title=this.c.sound()?'Mute sound':'Enable sound';}
  private chat(open=el('chat-compose').hidden){if(open&&!this.c.room.id){notice('Join a room to chat.');return;}el('chat-compose').hidden=!open;el('left-overlay').classList.toggle('chat-open',open);if(open){closeMenus();input('chat-text').focus();}else el('game').focus();}
- nextCamera(free=false){const seats=this.c.room.room?.members.filter(m=>m.seat>=0).map(m=>m.seat).sort()||[];const choices:(number|'free')[]=[...seats,'free'];this.camera=free?'free':choices[(choices.indexOf(this.camera)+1)%choices.length];this.c.game()?.setCamera(this.camera);el('spectate-label').textContent=this.camera==='free'?'Free camera':this.c.names()[this.camera]||'Spectate';}
+ private setCamera(target:number|'free'){this.camera=target;this.c.game()?.setCamera(target);el('spectate-label').textContent=target==='free'?'Free camera':this.c.names()[target]||'Spectate';this.markFollowedPlayer();}
+ private markFollowedPlayer(){for(const row of el('overlay-players').querySelectorAll<HTMLElement>('[data-follow-seat]')){const selected=this.c.seat()<0&&String(this.camera)===row.dataset.followSeat;row.classList.toggle('is-followed',selected);row.querySelector('button')?.setAttribute('aria-pressed',String(selected));}}
+ private followPlayer(id:string){if(this.c.seat()>=0||!this.c.playing())return;const member=this.c.room.room?.members.find(m=>m.id===id);if(member&&member.seat>=0)this.setCamera(member.seat);}
+ nextCamera(free=false){const seats=this.c.room.room?.members.filter(m=>m.seat>=0).map(m=>m.seat).sort()||[];const choices:(number|'free')[]=[...seats,'free'];this.setCamera(free?'free':choices[(choices.indexOf(this.camera)+1)%choices.length]);}
  reset(){this.lastWeapon=[-1,-1];this.weaponUntil=[0,0];this.deathSeq=[0,0];this.cycle=-1;for(const p of [0,1])el('worm-label-'+p).hidden=true;}
  room(r:Room,ping:(id:string)=>number|undefined){
   const newRoom=this.roomId!==r.id;if(newRoom){this.roomId=r.id;this.chatSeq=0;this.chatSeen.clear();this.pendingChat=[];el('chat-feed').replaceChildren();el('kill-feed').replaceChildren();this.reset();this.camera='free';}
   if(!newRoom&&r.id!=='local'&&r.members.some(member=>!this.memberIds.has(member.id)))this.beep();
   this.memberIds=new Set(r.members.map(member=>member.id));
   for(const msg of r.chat)this.receiveChat(msg,!newRoom);
-  const list=el('overlay-players');list.replaceChildren();const members=orderPlayers(r.members,seat=>this.c.playing()?this.state[16+seat]||0:0);
+  const list=el('overlay-players'),focusedMember=list.contains(document.activeElement)?(document.activeElement as HTMLElement).dataset.followPlayer:undefined;list.replaceChildren();const members=orderPlayers(r.members,seat=>this.c.playing()?this.state[16+seat]||0:0);
   for(const m of members){
-   const row=document.createElement('tr'),cell=document.createElement('td'),identity=document.createElement('div');identity.className='player-identity';
+   const canFollow=this.c.seat()<0&&m.seat>=0&&this.c.playing(),row=document.createElement('tr'),cell=document.createElement('td'),identity=document.createElement(canFollow?'button':'div');identity.className='player-identity';
+   if(canFollow){const control=identity as HTMLButtonElement;control.type='button';control.classList.add('player-follow');control.dataset.followPlayer=m.id;control.title='Spectate '+playerName(m.name);control.setAttribute('aria-label',control.title);row.className='can-follow';row.dataset.followSeat=String(m.seat);row.onclick=()=>this.followPlayer(m.id);}
    const dot=document.createElement('span');dot.className='worm-dot';dot.style.background=m.color;
    const name=document.createElement('span');name.className='member-name';name.textContent=playerName(m.name)+(m.id===r.self?' (you)':'');if(m.id===r.owner)name.title='Room host';
    identity.append(countryFlag(m.country),dot,name);cell.append(identity);row.append(cell,playerStatus(m.seat>=0));
    const ms=ping(m.id),active=m.seat>=0&&this.c.playing();
-   for(const value of [active?this.state[16+m.seat]:'—',active?this.state[44+m.seat]||0:'—',ms===undefined?'—':ms+' ms']){const td=document.createElement('td');td.textContent=String(value);row.append(td);}list.append(row);
+   for(const value of [active?this.state[16+m.seat]:'—',active?this.state[44+m.seat]||0:'—',ms===undefined?'—':ms+' ms']){const td=document.createElement('td');td.textContent=String(value);row.append(td);}list.append(row);if(canFollow&&m.id===focusedMember)identity.focus({preventScroll:true});
   }
   el('player-count').textContent=String(r.members.length);el('players-toggle').title=`${r.members.filter(m=>m.seat>=0).length} playing · ${r.members.filter(m=>m.seat<0).length} spectating`;
-  this.playButton();el('spectate-label').textContent=this.c.seat()>=0?'Spectate':this.camera==='free'?'Free camera':this.c.names()[this.camera]||'Spectate';
+  this.markFollowedPlayer();this.playButton();el('spectate-label').textContent=this.c.seat()>=0?'Spectate':this.camera==='free'?'Free camera':this.c.names()[this.camera]||'Spectate';
  }
  private unlockChatAudio(){if(!this.c.sound())return;try{this.chatAudio??=new AudioContext();if(this.chatAudio.state==='suspended')void this.chatAudio.resume();}catch{}}
  private beep(){if(!this.c.sound())return;this.unlockChatAudio();const ctx=this.chatAudio;if(!ctx||ctx.state!=='running')return;const tone=ctx.createOscillator(),gain=ctx.createGain(),now=ctx.currentTime;tone.type='square';tone.frequency.setValueAtTime(880,now);gain.gain.setValueAtTime(.035,now);gain.gain.exponentialRampToValueAtTime(.001,now+.065);tone.connect(gain);gain.connect(ctx.destination);tone.start(now);tone.stop(now+.07);tone.onended=()=>{tone.disconnect();gain.disconnect();};}

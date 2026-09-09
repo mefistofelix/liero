@@ -1,5 +1,15 @@
 # Local milestone validation — 2026-09-09
 
+## Player-list spectating
+
+Checked locally through the normal UI with two playing tabs and a third WebRTC
+spectator. Clicking either player's name or another cell in their row follows
+that worm and highlights only its row. The toolbar still cycles to free camera,
+which clears the highlight. Spectator rows have no follow control; a playing
+client has no follow controls in its player list. Tab and Enter select the next
+player, with keyboard focus retained when room polling rebuilds the table.
+The production bundle builds successfully. No native engine or protocol changes.
+
 ## Protocol 6
 
 - `bun run engine`, `bun run engine:wasm` and `bun run test`: 67 passing tests.
