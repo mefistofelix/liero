@@ -108,7 +108,7 @@ static void input(int p,int buttons,int angle,int wheel){
         if(hanging){
             w.release(Worm::Left);w.release(Worm::Right);
             w.press(Worm::Change);w.setControlState(Worm::Up,buttons&64);w.setControlState(Worm::Down,buttons&128);
-        }else if(buttons&64)w.press(Worm::Jump);
+        }else if((buttons&64)&&!w.ninjarope.out)w.press(Worm::Jump);
     }
 }
 extern "C" {
@@ -191,6 +191,21 @@ EMSCRIPTEN_KEEPALIVE const char* liero_weapon_name(int id){
 EMSCRIPTEN_KEEPALIVE void liero_loadout(int player,int slot,int id){
     if(player>=0&&player<2&&slot>=0&&slot<5&&id>=1&&id<=40)loadout[player][slot]=id;
 }
+EMSCRIPTEN_KEEPALIVE void liero_loadout_live(int player){
+    if(!session||player<0||player>1)return;
+    auto& g=session->game;auto& w=*g.worms[player];
+    WormWeapon previous[5];bool used[5]={};int selected=-1;
+    for(int k=0;k<5;++k)previous[k]=w.weapons[k];
+    for(int k=0;k<5;++k){
+        auto* type=&g.common->weapons[g.common->weapOrder[loadout[player][k]-1]];
+        int match=-1;for(int j=0;j<5;++j)if(!used[j]&&previous[j].type==type){match=j;break;}
+        if(match>=0){w.weapons[k]=previous[match];used[match]=true;if(match==w.currentWeapon)selected=k;}
+        else{WormWeapon fresh;fresh.type=type;fresh.ammo=type->ammo;fresh.loadingLeft=std::max(1,type->computedLoadingTime(*g.settings));w.weapons[k]=fresh;}
+        w.settings->weapons[k]=loadout[player][k];
+    }
+    if(selected>=0)w.currentWeapon=selected;
+    selectAllowedWeapons();
+}
 EMSCRIPTEN_KEEPALIVE int liero_start(unsigned seed,int withBot){
     participants=3;
     session.reset(); gfx.rand.seed(seed); gfx.settings.reset(new Settings);
@@ -243,6 +258,14 @@ EMSCRIPTEN_KEEPALIVE int liero_step(int b0,int a0,int w0,int b1,int a1,int w1){
     if(!session||session->game.isGameOver())return 0;
     input(0,b0,a0,w0);if(!practice)input(1,b1,a1,w1);
     session->process();return 1;
+}
+EMSCRIPTEN_KEEPALIVE void liero_begin_play(){
+    if(!session)return;auto& g=session->game;g.browserAutoRespawn=true;
+    for(int p=0;p<2;++p)if(participants&(1<<p)){
+        auto& w=*g.worms[p];if(w.visible)continue;
+        w.ready=true;if(w.killedTimer==0)w.beginRespawn(g);
+        w.logicRespawn=ftoi(w.pos)-gvl::ivec2(80,80);w.doRespawning(g);
+    }
 }
 EMSCRIPTEN_KEEPALIVE int liero_step_raw(int b0,int b1){
     if(!session)return 0;

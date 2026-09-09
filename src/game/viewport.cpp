@@ -240,7 +240,7 @@ void Viewport::draw(Game& game, Renderer& renderer, GameState state, bool isRepl
 				game.holdazone.rect.height(), game.cycles / 10);
 		}
 
-		if(!worm.visible
+		if(!game.browserOverlay && !worm.visible
 		&& worm.killedTimer <= 0
 		&& !worm.ready)
 		{

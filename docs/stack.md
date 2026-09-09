@@ -46,7 +46,7 @@ Hosting attivo su https://liero.haxthepax.chatgpt.site/ (Cloudflare Worker + D1)
 ## Stanze e browser
 
 Le stanze usano il contratto SQL D1 in locale: elenco pubblico, inviti privati,
-chat, heartbeat e signaling SDP/ICE. All’avvio si apre Room explorer con Temple sullo sfondo. Find nearest room
+chat, heartbeat e signaling SDP/ICE. All’avvio si apre Room Browser con Temple sullo sfondo. Find nearest room
 misura RTT delle stanze pubbliche in tutto il mondo e sceglie il ping minimo.
 In assenza di host raggiungibili crea una stanza pubblica. Tutti entrano da spettatori; due posti di gioco sono distinti
 dalla proprietà della stanza. Il pulsante Play prenota un posto disponibile.
@@ -107,3 +107,12 @@ Le migrazioni SQL esistenti sono copiate in `dist/.openai/drizzle` con un journa
 versionato; vengono applicate in fase di pubblicazione, mai nelle richieste.
 I task Bun possono usare i moduli di compatibilità `node:fs`/`node:path` supportati
 da Bun; questo non introduce un runtime Node.js.
+
+Le presenze usano un’identità diversa per ingresso: quit autenticato keepalive su
+pagehide, recupero della vecchia sessione al reload e filtro delle risposte tardive.
+D1 conserva per cinque minuti la revoca della sessione, impedendo a join tardivi
+di ricrearla. In caso di crash o rete assente resta il TTL di 120 secondi.
+Il protocollo WebRTC 3 registra anche i cambi di loadout nei frame sincronizzati
+e nella history. I preset sono locali e separati per i due profili.
+Il font TrueType è caricato con CSS @font-face sui browser, senza installazione
+di sistema; le icone PWA/Apple vengono convertite dal favicon.ico locale con Bun.

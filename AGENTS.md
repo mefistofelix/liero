@@ -77,17 +77,17 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 ## Browser product requirements
 - All interface text is English. Conversation with the user can remain Italian.
 - Full-page single camera by default; original split screen only for local two-player.
-- Mouse menus: room explorer, room creation/settings, weapons, maps/rotation,
+- Mouse menus: Room Browser, room creation/settings, weapons, maps/rotation,
   profile, leaderboard, recordings and controls.
 - Public/private rooms, private invite links, room chat. Show actual WebRTC RTT
   to the host for rooms and each member; show unavailable values as a dash.
 - Two active players preserve the original engine; other room members spectate.
   Spectators can join mid-round, follow either player, or use free camera.
 - Persist name, worm color, loadouts, room preferences and map rotation locally.
-  Generate a random color once on first launch. Save profile updates name/color
+  Generate a random color once on first launch. Closing Profile saves and applies name/color
   immediately in the current room and renderer without resetting simulation.
-- Play toggles to Stop while playing. Stop submits a synchronized suicide input
-  and releases the seat; pressing Play again re-enters.
+- Play toggles to Stop while playing. Stop and switching to spectator submit a synchronized suicide input
+  and release the seat; pressing Play again re-enters.
 - Weapon menu icons come from original game graphics. Map cards show terrain previews.
 - Import LEV/Powerlevel and common browser image formats by dropping files in Maps.
   Preserve LEV pixels/palettes. Show the conversion result for other images.
@@ -104,9 +104,9 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
 - English interface, using a font generated from original Liero bitmap glyphs.
 - Left toolbar: ONLY chat. ALL other controls go in the right toolbar: spectate/camera,
   play, copy invite, fullscreen, profile dropdown, current-room settings dropdown,
-  room explorer/create, player count/list and audio. Dropdowns align to the right.
+  Room Browser/create, player count/list and audio. Dropdowns align to the right.
   Copy room link and Fullscreen are the final two buttons at the far right.
-- Room explorer has three tabs: Explore (default), Create room and Local play. Creation settings
+- Room Browser has three tabs: Explore (default), Create room and Local play. Creation settings
   belong only in the Create room panel, never below the server listing.
 - Help has its own right-toolbar icon and is not part of Profile. Installation
   uses the browser UI; do not intercept the install prompt or add an Install button.
@@ -123,7 +123,7 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   through original Settings::weapTable. Validate at least one permitted weapon.
   Preserve all five personal weapon slots; skip forbidden slots without replacing
   them. If none is permitted, firing is disabled until a weapon becomes available.
-  Default room weapon loading time is 30%.
+  Default room weapon loading time is 20%.
 - Latest correction: room listings have ONE Players column showing total room
   members/capacity, e.g. 3/16, including spectators. Do not show the two-seat ratio.
   Player overlays use a table with Player, Kills, Deaths and Ping headers; rows
@@ -142,9 +142,9 @@ and a wasm-flate decompression helper. Preserve provenance and licenses.
   Observe original StatsRecorder callbacks. Do not infer weapons from current loadouts.
 - Worm labels display the player name, with two thin bars below it for health and
   current-weapon reload progress, including while spectating. Use original engine
-  health limits and reload timers. Keep the player name on weapon changes. Hide the
+  health limits and reload timers. Keep the player name on weapon changes, and briefly show the local player weapon name above it. Hide the
   original kill/suicide banners and weapon-switch text; use the browser overlays.
-- Startup: display Temple and open Room explorer on the Explore tab. Joining or
+- Startup: open Room Browser directly on Explore while loading Temple. No welcome popup. Joining or
   creating a room and explicit Play actions close the popup. Invite links join directly.
   Find nearest room chooses the lowest measured RTT worldwide and creates a public
   room if none is reachable. Temple is the default rotation; preserve custom pools.
@@ -183,3 +183,21 @@ TC assets, pkg and CMake metadata remain at their upstream paths to preserve the
 reference engine build. Root contains package.json, Bun binary (ignored), README,
 AGENTS and original native metadata; do not add new competing app scaffolds.
 `docs/stack.md` is the runtime/build reference; `docs/PORTING.md` records parity limits.
+
+## Presence and loadout updates
+- Send an authenticated keepalive quit on pagehide. Recover unfinished quits from the
+  previous page on navigation, without removing a separately opened tab (Web Locks).
+  Use a fresh identity for every room entry. D1 departure records reject delayed joins;
+  scope poll and peer callbacks to the entry epoch. Rejoining the same room is a no-op.
+  Unexpected crashes/offline quits still rely on the 120-second membership expiry.
+- Named loadout presets are saved separately for each local player. Selecting, editing
+  or dragging slots applies immediately; Alt+Left/Right also reorders slots. Online
+  changes are host-committed with frame history (protocol 3). Retain ammunition and
+  reload progress of kept weapons; newly added weapons start their normal reload.
+- Split screen shows a second profile toolbar button; player 1 remains the online
+  profile. Close Profile to save and apply, without a Save button or live typing updates.
+- Play spawns immediately without a fire confirmation; subsequent respawns are automatic
+  after the original delay. Preserve native behavior unless the browser adapter opts in.
+- Held W must not detach a rope in flight; it shortens once attached. Space/middle
+  still explicitly release it. Help sits immediately before the sound button.
+- Derive PWA and Apple icons from the bundled favicon with the Bun assets:icons task.

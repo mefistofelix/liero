@@ -25,12 +25,17 @@ function publicRoom(r,count=0){return {id:r.id,name:r.name,region:r.region,count
 export async function roomAPI(request,env,key){
  const db=env.DB,url=new URL(request.url),parts=url.pathname.split('/').filter(Boolean),id=parts[2],action=parts[3]||'',now=Math.floor(Date.now()/1000);
  try{
-  await db.batch([statement(db,'DELETE FROM rooms WHERE expires_at<=?',now),statement(db,'DELETE FROM members WHERE expires_at<=?',now),statement(db,'DELETE FROM room_signals WHERE expires_at<=?',now)]);
+  await db.batch([statement(db,'DELETE FROM rooms WHERE expires_at<=?',now),statement(db,'DELETE FROM members WHERE expires_at<=?',now),statement(db,'DELETE FROM room_signals WHERE expires_at<=?',now),statement(db,'DELETE FROM room_departures WHERE expires_at<=?',now)]);
   if(!id&&request.method==='GET'){
    const rows=await query(db,`SELECT r.*,COUNT(m.player) count,SUM(CASE WHEN m.seat>=0 THEN 1 ELSE 0 END) players FROM rooms r LEFT JOIN members m ON m.room=r.id WHERE r.private=0 GROUP BY r.id ORDER BY r.name LIMIT 100`);
    return json({rooms:rows.map(r=>({...publicRoom(r,r.count),players:r.players})),region:detectRegion(request.cf)});
   }
   if(!key)fail('Invalid identity.',401);
+  if(!id&&request.method==='DELETE'){
+   await db.batch([statement(db,'INSERT INTO room_departures(player,expires_at) VALUES(?,?) ON CONFLICT(player) DO UPDATE SET expires_at=excluded.expires_at',key,now+300),statement(db,'DELETE FROM rooms WHERE owner=?',key),statement(db,'DELETE FROM members WHERE player=?',key)]);
+   return json({ok:true});
+  }
+  if((await query(db,'SELECT 1 FROM room_departures WHERE player=?',key)).length)fail('This room session has ended. Join again.',409);
   if(!id&&request.method==='POST'){
    const b=await body(request),region=detectRegion(request.cf)||'',country=requestCountry(request,b.country);
    const existing=await query(db,'SELECT room FROM members WHERE player=?',key);if(existing.length)fail('Leave your current room first.',409);
@@ -40,15 +45,15 @@ export async function roomAPI(request,env,key){
    // candidates using measured WebRTC RTT before calling the join endpoint.
    if(b.auto===true)statements.push(statement(db,`INSERT INTO members(room,player,name,seat,expires_at)
     SELECT r.id,?,?,-1,? FROM rooms r WHERE r.private=0
-    AND (SELECT COUNT(*) FROM members m WHERE m.room=r.id)<16 ORDER BY r.id LIMIT 1`,key,playerName,now+TTL));
+    AND (SELECT COUNT(*) FROM members m WHERE m.room=r.id)<16 AND NOT EXISTS(SELECT 1 FROM room_departures WHERE player=?) ORDER BY r.id LIMIT 1`,key,playerName,now+TTL,key));
    statements.push(statement(db,`INSERT INTO rooms(id,owner,name,region,private,invite,settings,expires_at)
-    SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM members WHERE player=?)`,roomId,key,name,region,b.auto?0:(b.private?1:0),await hash(invite),JSON.stringify(settings),now+TTL,key));
+    SELECT ?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM members WHERE player=?) AND NOT EXISTS(SELECT 1 FROM room_departures WHERE player=?)`,roomId,key,name,region,b.auto?0:(b.private?1:0),await hash(invite),JSON.stringify(settings),now+TTL,key,key));
    statements.push(statement(db,`INSERT INTO members(room,player,name,seat,expires_at) SELECT ?,?,?,-1,? WHERE EXISTS(SELECT 1 FROM rooms WHERE id=?)`,roomId,key,playerName,now+TTL,roomId));
    statements.push(statement(db,'UPDATE rooms SET country=? WHERE id=?',country,roomId));
    statements.push(statement(db,'UPDATE members SET country=? WHERE player=?',country,key));
    statements.push(statement(db,'UPDATE members SET color=? WHERE player=?',/^#[a-f0-9]{6}$/i.test(b.color)?b.color:'#6868fc',key));
    statements.push(statement(db,'SELECT room,seat FROM members WHERE player=?',key));
-   const r=await db.batch(statements),member=r.at(-1).results[0];return json({id:member.room,seat:member.seat,invite:member.room===roomId?invite:undefined},201);
+   const r=await db.batch(statements),member=r.at(-1).results[0];if(!member)fail('This room session has ended. Join again.',409);return json({id:member.room,seat:member.seat,invite:member.room===roomId?invite:undefined},201);
   }
   if(!id||!/^[a-f0-9-]{36}$/.test(id))fail('Room not found.',404);
   const room=(await query(db,'SELECT * FROM rooms WHERE id=?',id))[0];if(!room)fail('Room closed or expired.',404);
@@ -60,7 +65,7 @@ export async function roomAPI(request,env,key){
    const b=await body(request);const playerName=short(b.name,20);
    if(member)return json({id,seat:member.seat});
    const occupied=(await query(db,'SELECT room FROM members WHERE player=?',key))[0];if(occupied)fail('Leave your current room first.',409);
-   const r=await db.batch([statement(db,`INSERT INTO members(room,player,name,seat,expires_at) SELECT ?,?,?,-1,? WHERE (SELECT COUNT(*) FROM members WHERE room=?)<16`,id,key,playerName,now+TTL,id),statement(db,'SELECT seat FROM members WHERE player=? AND room=?',key,id)]);
+   const r=await db.batch([statement(db,`INSERT INTO members(room,player,name,seat,expires_at) SELECT ?,?,?,-1,? WHERE (SELECT COUNT(*) FROM members WHERE room=?)<16 AND NOT EXISTS(SELECT 1 FROM room_departures WHERE player=?)`,id,key,playerName,now+TTL,id,key),statement(db,'SELECT seat FROM members WHERE player=? AND room=?',key,id)]);
    if(!r[1].results.length)fail('Room is full.',409);await query(db,'UPDATE members SET country=? WHERE room=? AND player=?',requestCountry(request,b.country),id,key);await query(db,'UPDATE members SET color=? WHERE room=? AND player=?',/^#[a-f0-9]{6}$/i.test(b.color)?b.color:'#6868fc',id,key);return json({id,seat:-1});
   }
   if(action==='signals'){

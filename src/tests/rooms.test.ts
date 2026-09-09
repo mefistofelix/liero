@@ -76,3 +76,22 @@ test('room weapon availability is host-owned, validated and persisted',async()=>
  expect((await f.request('b',`/rooms/${id}/state`)).data.settings.allowedWeapons).toEqual([1,5,9]);
  }finally{f.sql.close();}
 });
+
+test('quit removes membership immediately, fences late joins and cannot delete a later visit',async()=>{
+ const f=await fixture();try{
+  const {id}=(await f.request('a','/rooms','POST',{name:'Re-entry test',playerName:'Host',settings})).data;
+  await f.request('b',`/rooms/${id}/join`,'POST',{name:'Guest'});
+  await f.request('b',`/rooms/${id}/join`,'POST',{name:'Guest'});
+  expect((await f.request('a',`/rooms/${id}/state`)).data.members).toHaveLength(2);
+  expect((await f.request('b','/rooms','DELETE')).status).toBe(200);
+  expect((await f.request('a',`/rooms/${id}/state`)).data.members).toHaveLength(1);
+  expect((await f.request('b',`/rooms/${id}/join`,'POST',{name:'Guest'})).status).toBe(409);
+  await f.request('c',`/rooms/${id}/join`,'POST',{name:'Guest'});
+  await f.request('b','/rooms','DELETE');
+  const room=(await f.request('a',`/rooms/${id}/state`)).data;
+  expect(room.members).toHaveLength(2);expect(room.members.filter(m=>m.name==='Guest')).toHaveLength(1);
+  await f.request('d','/rooms','DELETE');
+  expect((await f.request('d','/rooms','POST',{name:'Late creation',playerName:'Late',settings})).status).toBe(409);
+  await f.request('a','/rooms','DELETE');expect((await f.request('c',`/rooms/${id}/state`)).status).toBe(404);
+ }finally{f.sql.close();}
+});

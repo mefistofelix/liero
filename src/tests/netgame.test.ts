@@ -26,6 +26,8 @@ test('delayed peer inputs and late spectator history reproduce the host simulati
  const ha=new NetworkRound(a,host,'round',0),gb=new NetworkRound(b,guest,'round',1),spectator=new NetworkRound(c,{host:false,room:{owner:'host'}} as any,'round',-1);
  const errors:string[]=[];ha.onError=gb.onError=spectator.onError=message=>errors.push(message);
  for(clock=0;clock<650;clock++){
+  if(clock===300)ha.queueLoadout(1,[35,36,9,25,19]);
+  if(clock===350)ha.queueLoadout(0,[1,2,3,4,5]);
   if(clock===220)ha.queueRules({mode:0,lives:20,loading:40,bonuses:2});
   if(clock===450)ha.queueRules({mode:0,lives:20,loading:200,bonuses:2,allowedWeapons:[35]});
   for(let i=messages.length-1;i>=0;i--)if(messages[i].at<=clock){const m=messages.splice(i,1)[0];(m.to==='host'?ha:gb).receive(m.to==='host'?'guest':'host',m.packet);}
@@ -34,7 +36,7 @@ test('delayed peer inputs and late spectator history reproduce the host simulati
   if(clock%7===0)a._liero_render();if(clock%3===0)b._liero_render();
  }
  expect(ha.frame).toBeGreaterThan(600);expect(errors).toEqual([]);
- expect(ha.log.filter(data=>data[7])).toHaveLength(2);expect(ha.log.some(data=>data[3]&256)).toBe(true);
+ expect(ha.log.filter(data=>data[7])).toHaveLength(2);expect(ha.log.filter(data=>data[8])).toHaveLength(2);expect(ha.log.some(data=>data[3]&256)).toBe(true);
  ha.history('spectator');while(spectator.frame<ha.frame)expect(spectator.advance([0,0,0])).toBe(true);
  expect(c._liero_hash()).toBe(a._liero_hash());expect(errors).toEqual([]);
 });

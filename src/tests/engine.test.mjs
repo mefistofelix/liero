@@ -129,3 +129,19 @@ const wasmPath=new URL('../../.local/build/wasm/openliero.mjs',import.meta.url);
   }
  }
 });
+
+test('held W does not release a launched or rethrown rope while it is flying',async()=>{
+ const m=await fresh(),data=new Uint8Array(176400);data.fill(163,0,504*5);data.fill(163,504*345);m.FS.writeFile('/import.lev',data);m._liero_options(0,99,30,0,1);m._liero_start(321,0);m._liero_begin_play();
+ for(let i=0;i<300;i++)m._liero_step(0,64,0,0,64,0);
+ m._liero_step(64,64,0,0,64,0);m._liero_step(64|16,64,0,0,64,0);expect(state(m)[5]).toBe(1);
+ for(let i=0;i<50;i++){m._liero_step(64,64,0,0,64,0);expect(state(m)[5]).toBe(1);}
+ m._liero_step(64|16,64,0,0,64,0);expect(state(m)[5]).toBe(1);m._liero_step(64,64,0,0,64,0);expect(state(m)[5]).toBe(1);
+ m._liero_step(64|4,64,0,0,64,0);expect(state(m)[5]).toBe(0);
+});
+test('Play spawns immediately without fire and live loadout reordering preserves ammo and reload',async()=>{
+ const m=await fresh();m._liero_options(0,99,30,0,0);const loadout=[19,25,9,36,35];loadout.forEach((id,k)=>m._liero_loadout(0,k,id));m._liero_start(123,0);m._liero_begin_play();let p=m._liero_info()>>2;
+ expect(m.HEAP32[p+26]).toBe(1);expect(m.HEAP32[p+30]).toBe(1);const weapon=m._liero_weapon_id(m.HEAP32[p+27]),ammo=m.HEAP32[p+12],reload=m.HEAP32[p+47],cycle=m.HEAP32[p];
+ [...loadout].reverse().forEach((id,k)=>m._liero_loadout(0,k,id));m._liero_loadout_live(0);m._liero_info();expect(m.HEAP32[p]).toBe(cycle);expect(m._liero_weapon_id(m.HEAP32[p+27])).toBe(weapon);expect(m.HEAP32[p+12]).toBe(ammo);expect(m.HEAP32[p+47]).toBe(reload);
+ for(let k=0;k<5;k++)m._liero_loadout(0,k,1);m._liero_loadout_live(0);m._liero_info();expect(m._liero_weapon_id(m.HEAP32[p+27])).toBe(1);expect(m.HEAP32[p+47]).toBeGreaterThan(0);expect(m.HEAP32[p+26]).toBe(1);
+ m._liero_step(256,64,0,0,64,0);for(let f=0;f<350;f++)m._liero_step(0,64,0,0,64,0);m._liero_info();expect(m.HEAP32[p+26]).toBe(1);
+});

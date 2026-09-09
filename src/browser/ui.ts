@@ -7,8 +7,9 @@ export function report(error:unknown){console.error(error);notice(error instance
 const opening=new Map<string,(()=>unknown)[]>();let menuChange=(open:boolean)=>{};
 export function onMenu(id:string,fn:()=>unknown){opening.set(id,[...(opening.get(id)||[]),fn]);}
 export function menuHandler(fn:(open:boolean)=>void){menuChange=fn;}
-const menuStack:string[]=[];
-function hideMenus(){document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>d.close());}
+const menuStack:string[]=[];const closing=new Map<string,()=>void>();
+export function onMenuClose(id:string,fn:()=>void){closing.set(id,fn);}
+function hideMenus(){document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach(d=>{closing.get(d.id)?.();d.close();});}
 function showMenu(id:string,restore=false){const target=el<HTMLDialogElement>(id);if(target.classList.contains('dropdown'))target.show();else target.showModal();menuChange(true);if(!restore)for(const fn of opening.get(id)||[])Promise.resolve().then(fn).catch(report);}
 export function closeMenus(){menuStack.length=0;hideMenus();menuChange(false);}
 function backMenu(){const previous=menuStack.pop();hideMenus();if(previous)showMenu(previous,true);else menuChange(false);}

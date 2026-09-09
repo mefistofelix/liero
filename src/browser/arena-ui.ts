@@ -3,11 +3,11 @@ import type {RoomClient,Room} from './rooms.ts';
 import type {EngineModule,LocalGame} from './engine.ts';
 import type {WeaponLibrary} from './weapons-ui.ts';
 import {countryFlag} from './flags.ts';
-type Context={room:RoomClient;game:()=>LocalGame;engine:()=>EngineModule;weapons:()=>WeaponLibrary;names:()=>string[];playing:()=>boolean;stopping:()=>boolean;color:()=>string;seat:()=>number;sound:()=>boolean;setSound:(v:boolean)=>void;join:()=>Promise<void>;spectate:()=>Promise<void>;copy:()=>Promise<void>};
+type Context={room:RoomClient;game:()=>LocalGame;engine:()=>EngineModule;weapons:()=>WeaponLibrary;names:()=>string[];playing:()=>boolean;stopping:()=>boolean;color:()=>string;color2:()=>string;seat:()=>number;sound:()=>boolean;setSound:(v:boolean)=>void;join:()=>Promise<void>;spectate:()=>Promise<void>;copy:()=>Promise<void>};
 export class ArenaUI{
- private shown=true;private camera:number|'free'='free';private chatSeq=0;private roomId='';private state=new Int32Array(52);private lastPanel=0;private deathSeq=[0,0];private cycle=-1;private chatSeen=new Set<string>();private pendingChat:{text:string;line:HTMLElement}[]=[];private chatAudio?:AudioContext;
+ private lastWeapon=[-1,-1];private weaponUntil=[0,0];private shown=true;private camera:number|'free'='free';private chatSeq=0;private roomId='';private state=new Int32Array(52);private lastPanel=0;private deathSeq=[0,0];private cycle=-1;private chatSeen=new Set<string>();private pendingChat:{text:string;line:HTMLElement}[]=[];private chatAudio?:AudioContext;
  constructor(private c:Context){
-  for(let p=0;p<2;p++){const label=el('worm-label-'+p),name=document.createElement('span');name.id='worm-name-'+p;name.className='worm-name';label.append(name);for(const kind of ['health','reload']){const bar=document.createElement('span'),fill=document.createElement('i');bar.className='worm-bar worm-'+kind;fill.id='worm-'+kind+'-'+p;bar.append(fill);label.append(bar);}}
+  for(let p=0;p<2;p++){const label=el('worm-label-'+p),name=document.createElement('span');name.id='worm-name-'+p;name.className='worm-name';const weapon=document.createElement('span');weapon.id='worm-weapon-'+p;weapon.className='own-weapon';weapon.hidden=true;label.append(weapon,name);for(const kind of ['health','reload']){const bar=document.createElement('span'),fill=document.createElement('i');bar.className='worm-bar worm-'+kind;fill.id='worm-'+kind+'-'+p;bar.append(fill);label.append(bar);}}
   click('players-toggle',()=>{this.shown=!this.shown;el('player-panel').hidden=!this.shown;el('players-toggle').setAttribute('aria-expanded',String(this.shown));});
   click('sound-toggle',()=>{c.setSound(!c.sound());this.audio();});this.audio();
   click('toolbar-invite',c.copy);click('join-play',c.join);
@@ -22,7 +22,7 @@ export class ArenaUI{
  audio(){el('sound-toggle').setAttribute('aria-pressed',String(!this.c.sound()));el('sound-toggle').setAttribute('aria-label',this.c.sound()?'Mute sound':'Enable sound');el('sound-toggle').title=this.c.sound()?'Mute sound':'Enable sound';}
  private chat(open=el('chat-compose').hidden){if(open&&!this.c.room.id){notice('Join a room to chat.');return;}el('chat-compose').hidden=!open;el('left-overlay').classList.toggle('chat-open',open);if(open){closeMenus();input('chat-text').focus();}else el('game').focus();}
  nextCamera(free=false){const seats=this.c.room.room?.members.filter(m=>m.seat>=0).map(m=>m.seat).sort()||[];const choices:(number|'free')[]=[...seats,'free'];this.camera=free?'free':choices[(choices.indexOf(this.camera)+1)%choices.length];this.c.game()?.setCamera(this.camera);el('spectate-label').textContent=this.camera==='free'?'Free camera':this.c.names()[this.camera]||'Spectate';}
- reset(){this.deathSeq=[0,0];this.cycle=-1;for(const p of [0,1])el('worm-label-'+p).hidden=true;}
+ reset(){this.lastWeapon=[-1,-1];this.weaponUntil=[0,0];this.deathSeq=[0,0];this.cycle=-1;for(const p of [0,1])el('worm-label-'+p).hidden=true;}
  room(r:Room,ping:(id:string)=>number|undefined){
   const newRoom=this.roomId!==r.id;if(newRoom){this.roomId=r.id;this.chatSeq=0;this.chatSeen.clear();this.pendingChat=[];el('chat-feed').replaceChildren();el('kill-feed').replaceChildren();this.reset();this.camera='free';}
   for(const msg of r.chat)this.receiveChat(msg,!newRoom);
@@ -63,12 +63,16 @@ export class ArenaUI{
  }
  frame(state:Int32Array){
   this.state=state.slice();if(state[0]<this.cycle)this.reset();this.cycle=state[0];const c=this.c,seat=c.seat(),now=performance.now();
-  if(!c.room.id&&now-this.lastPanel>500){this.lastPanel=now;this.room({id:'local',self:'local0',owner:'local0',phase:'playing',members:c.names().map((name,p)=>({id:'local'+p,name,color:p?'#3cac3c':c.color(),seat:p})),chat:[]} as Room,()=>0);}
+  if(!c.room.id&&c.playing()&&now-this.lastPanel>500){this.lastPanel=now;this.room({id:'local',self:'local0',owner:'local0',phase:'playing',members:c.names().map((name,p)=>({id:'local'+p,name,color:p?c.color2():c.color(),seat:p})),chat:[]} as Room,()=>0);}
   const canvas=el<HTMLCanvasElement>('game'),rect=canvas.getBoundingClientRect(),stage=el('stage').getBoundingClientRect();
   for(let p=0;p<2;p++){
    const label=el('worm-label-'+p),base=24+p*4,x=state[base],y=state[base+1];const own=p===seat;
    label.hidden=!c.playing()||!state[base+2]||x<0||x>canvas.width||y<0||y>canvas.height;
    el('worm-name-'+p).textContent=c.names()[p];
+   const selected=state[base+3],weaponLabel=el('worm-weapon-'+p);
+   if(selected!==this.lastWeapon[p]){if(own&&this.lastWeapon[p]>=0&&state[base+2])this.weaponUntil[p]=now+1500;this.lastWeapon[p]=selected;}
+   weaponLabel.hidden=!own||now>=this.weaponUntil[p];
+   if(!weaponLabel.hidden)weaponLabel.textContent=c.weapons()?.get(c.engine()._liero_weapon_id(selected))?.name||'';
    const health=Math.max(0,Math.min(1,state[2+p*5]/Math.max(1,state[46+p*3]))),reload=Math.max(0,Math.min(1,1-state[47+p*3]/Math.max(1,state[48+p*3])));
    el('worm-health-'+p).style.transform=`scaleX(${health})`;el('worm-reload-'+p).style.transform=`scaleX(${reload})`;
    label.style.left=rect.left-stage.left+x*rect.width/canvas.width+'px';label.style.top=rect.top-stage.top+(y-9)*rect.height/canvas.height+'px';

@@ -21,6 +21,7 @@ const files: Record<string,{name:string,type:string}> = {
  '/manifest.webmanifest':{name:'manifest.webmanifest',type:'application/manifest+json'},
  '/sw.js':{name:'sw.js',type:'text/javascript'},
  '/favicon.ico':{name:'favicon.ico',type:'image/x-icon'},
+ '/icon-180.png':{name:'icon-180.png',type:'image/png'},
  '/icon-192.png':{name:'icon-192.png',type:'image/png'},
  '/icon-512.png':{name:'icon-512.png',type:'image/png'},
 };

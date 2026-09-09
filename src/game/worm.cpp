@@ -495,7 +495,7 @@ void Worm::process(Game& game)
 			// Worm is dead
 			steerableCount = 0;
 
-			if(pressedOnce(Fire))
+			if(pressedOnce(Fire) || game.browserAutoRespawn)
 				ready = true;
 
 			if(killedTimer > 0)

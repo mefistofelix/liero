@@ -10,7 +10,7 @@ audio and input.
 [Open the hosted game](https://liero.haxthepax.chatgpt.site/).
 The hosted game is public.
 
-The game opens Room explorer over Temple, the default map. Choose a room, create
+The game opens Room Browser over Temple, the default map. Choose a room, create
 one, or use **Find nearest room** to join the reachable public room with the
 lowest ping (or create one if none is reachable). Everyone enters as a spectator; select
 **Join game** to play. Rooms support up to 16 people, including spectators, with
@@ -23,9 +23,10 @@ player joins, a synchronized round starts on the same map using the room rules.
 - **Room settings:** choose rules, permitted weapons and map rotation. Hosts can use **Play now** in Maps to restart on a selected level for everyone.
 - **Maps:** 897 bundled levels with previews, plus drag-and-drop LEV, Powerlevel
   and common image imports. Levels are served from our hosting, not third parties.
-- **Profile:** save your name, worm color, five-weapon loadout and key bindings locally.
+- **Profile:** close to save your name and worm color. Split screen has separate player profiles.
   A random initial color is saved automatically; name and color changes apply live.
-- **Play / Stop:** Stop commits a suicide and returns you to spectating; Play rejoins.
+- **Loadouts:** save named presets, edit weapons and drag slots to reorder. Changes apply immediately, including online. Kept weapons retain their ammunition; new weapons reload.
+- **Play / Stop:** Play spawns immediately. Stop or switching to spectator commits a suicide and releases your seat.
 - **Default weapons:** Gauss Gun, Larpa, Chiquita Bomb, Spikeballs and Shotgun.
 - **Local play:** practice against the bot or use the original split screen on one keyboard.
 - **Recordings:** capture gameplay or live spectating, then replay/download MP4
